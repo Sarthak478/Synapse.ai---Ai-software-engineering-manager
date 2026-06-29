@@ -1,0 +1,185 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,300;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  /* Elegant Beige, Coffee, and Teal Green Palette */
+  --color-beige-50: #FAF7F2;
+  --color-beige-100: #F4EFEB;
+  --color-beige-200: #E9DEC9;
+  --color-coffee-50: #F3EFF1;
+  --color-coffee-500: #8A7264;
+  --color-coffee-600: #735C4E;
+  --color-coffee-800: #4B3B32;
+  --color-coffee-900: #2B1E17;
+  --color-teal-50: #F0F7F6;
+  --color-teal-100: #DCEEEB;
+  --color-teal-300: #A8D1C9;
+  --color-teal-600: #1C7C71;
+  --color-teal-700: #12574F;
+  --color-teal-800: #0C3E38;
+}
+
+/* Theme variables mapping */
+:root {
+  --background-app: #FAF7F2;
+  --background-card: #FFFFFF;
+  --border-card: #E9DEC9;
+  --text-main: #4B3B32;
+  --text-muted: #8A7264;
+  --background-badge: #F4EFEB;
+  --text-badge: #2B1E17;
+}
+
+.dark {
+  --background-app: #150E0A;      /* Rich Dark Espresso Ground */
+  --background-card: #1F1510;     /* Toasted Hazelnut/Choc roast */
+  --border-card: #3D2D23;         /* Deep Roasted Roast border */
+  --text-main: #ECE4DE;           /* Smooth Latte Foam */
+  --text-muted: #A38F82;          /* Lightly frothed milk chocolate */
+  --background-badge: #2D2018;    /* Dark bean roast badge level */
+  --text-badge: #FAF7F2;          /* Beige main text */
+}
+
+/* Forceful elegant theme application for the workspace */
+.dark .bg-beige-50, .dark.bg-beige-50 {
+  background-color: var(--background-app) !important;
+}
+
+.dark main {
+  background-color: var(--background-app) !important;
+}
+
+.dark header {
+  background-color: rgba(31, 21, 16, 0.9) !important;
+  border-color: var(--border-card) !important;
+}
+
+.dark .bg-white,
+.dark .bg-white\/90 {
+  background-color: var(--background-card) !important;
+}
+
+.dark .border-slate-100,
+.dark .border-slate-150,
+.dark .border-slate-155,
+.dark .border-slate-200,
+.dark .border-slate-205,
+.dark .border-slate-200\/50,
+.dark .border-slate-250\/50,
+.dark .border-slate-300,
+.dark .border-beige-200 {
+  border-color: var(--border-card) !important;
+}
+
+.dark .bg-slate-50,
+.dark .bg-slate-50\/40,
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/60,
+.dark .bg-slate-50\/20,
+.dark .bg-slate-100,
+.dark .bg-slate-100\/60,
+.dark .bg-beige-50,
+.dark .bg-beige-100,
+.dark .bg-slate-50\/10 {
+  background-color: var(--background-badge) !important;
+}
+
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-855,
+.dark .text-slate-905,
+.dark .text-coffee-800,
+.dark .text-coffee-850,
+.dark .text-coffee-900,
+.dark .text-neutral-900 {
+  color: var(--text-main) !important;
+}
+
+.dark .text-slate-400,
+.dark .text-slate-450,
+.dark .text-slate-500,
+.dark .text-coffee-500,
+.dark .text-coffee-600 {
+  color: var(--text-muted) !important;
+}
+
+.dark .text-emerald-555,
+.dark .text-emerald-600,
+.dark .text-emerald-700 {
+  color: #3EB8A8 !important; /* Glowing warm minty teal */
+}
+
+.dark .bg-emerald-50,
+.dark .bg-emerald-50\/50 {
+  background-color: #12302C !important;
+  color: #3EB8A8 !important;
+}
+
+.dark .recharts-default-tooltip {
+  background-color: var(--background-card) !important;
+  border-color: var(--border-card) !important;
+  color: var(--text-main) !important;
+}
+
+/* Enhancing general UI elegance with smooth transition layers */
+.bg-white, main, header, .border-slate-200, .bg-slate-50, aside, button, .bg-beige-50 {
+  transition: background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), 
+              border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), 
+              color 0.15s ease-in-out,
+              box-shadow 0.2s ease-in;
+}
+
+/* Polishing cards and shadows */
+.bg-white {
+  box-shadow: 0 4px 20px -2px rgba(138, 114, 100, 0.04), 0 2px 6px -1px rgba(138, 114, 100, 0.02);
+}
+.dark .bg-white {
+  box-shadow: 0 4px 25px -4px rgba(0, 0, 0, 0.35), 0 2px 8px -1px rgba(0, 0, 0, 0.2);
+}
+
+/* Interactive card transitions */
+.interactive-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px -5px rgba(138, 114, 100, 0.08), 0 8px 16px -6px rgba(138, 114, 100, 0.04);
+}
+.dark .interactive-card:hover {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.45), 0 8px 16px -6px rgba(0, 0, 0, 0.3);
+}
+
+/* Animations helpers */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleUp {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-scale-up {
+  animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Scrollbars styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
