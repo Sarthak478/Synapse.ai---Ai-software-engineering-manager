@@ -65,14 +65,14 @@ export default function DailyStandups({ state, onSaveState }: DailyStandupsProps
             const blockTask = tasks.find(tk => tk.id === bid);
             return blockTask ? blockTask.title : "pending modules";
           });
-          blockersList.push(`Blocked by Alice on completion of: "${blocks.join(", ")}".`);
+          blockersList.push(`Blocked on completion of: "${blocks.join(", ")}".`);
         }
       });
 
       // Default fallbacks for visual density
       if (completedList.length === 0) {
         completedList = d.id === "dev-4" 
-          ? ["Audited crypto Stripe webhook schemas inside Diana's local runners."]
+          ? ["Audited crypto Stripe webhook schemas inside local runners."]
           : ["Drafted architecture dependencies map inside repository visual grids."];
       }
       if (activeList.length === 0) {

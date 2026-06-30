@@ -46,9 +46,9 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
   const [syncStage, setSyncStage] = useState<number>(0);
   const [webhookLastSynced, setWebhookLastSynced] = useState<string>("2026-06-22 02:40 AM");
   const [webhookLogs, setWebhookLogs] = useState<any[]>([
-    { id: "wh-983", event: "push", branch: "main", author: "Alice Arch", message: "feat: optimized lock contention in Redis adapter", time: "2 mins ago", status: "delivered" },
-    { id: "wh-982", event: "pull_request", action: "opened", title: "Implement Stripe SSL webhooks support", author: "Bob Backend", time: "1 hour ago", status: "delivered" },
-    { id: "wh-981", event: "push", branch: "dev", author: "Charlie Client", message: "style: refined responsive layout padding on bento dashboard", time: "3 hours ago", status: "delivered" }
+    { id: "wh-983", event: "push", branch: "main", author: "Lead Engineer", message: "feat: optimized lock contention in Redis adapter", time: "2 mins ago", status: "delivered" },
+    { id: "wh-982", event: "pull_request", action: "opened", title: "Implement Stripe SSL webhooks support", author: "Contributor", time: "1 hour ago", status: "delivered" },
+    { id: "wh-981", event: "push", branch: "dev", author: "CI System", message: "style: refined responsive layout padding on bento dashboard", time: "3 hours ago", status: "delivered" }
   ]);
 
   const syncSteps = [
@@ -78,9 +78,9 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
             setWebhookLastSynced(`${formattedDate} ${formattedTime}`);
 
             const mockEvents = [
-              { id: `wh-${Date.now().toString().slice(-3)}9`, event: "push", branch: "main", author: "Bob Backend", message: "refactor: implemented secure callback protocols based on webhook logs", time: "Just now", status: "delivered" },
-              { id: `wh-${Date.now().toString().slice(-3)}8`, event: "pull_request", action: "merged", title: "Refactored JWT callback promises to TypeScript classes", author: "Alice Arch", time: "Just now", status: "delivered" },
-              { id: `wh-${Date.now().toString().slice(-3)}7`, event: "push", branch: "dev", author: "Charlie Client", message: "fix: solved border truncation inside bento grid widgets", time: "Just now", status: "delivered" }
+              { id: `wh-${Date.now().toString().slice(-3)}9`, event: "push", branch: "main", author: "Lead Engineer", message: "refactor: implemented secure callback protocols based on webhook logs", time: "Just now", status: "delivered" },
+              { id: `wh-${Date.now().toString().slice(-3)}8`, event: "pull_request", action: "merged", title: "Refactored JWT callback promises to TypeScript classes", author: "Contributor", time: "Just now", status: "delivered" },
+              { id: `wh-${Date.now().toString().slice(-3)}7`, event: "push", branch: "dev", author: "CI System", message: "fix: solved border truncation inside bento grid widgets", time: "Just now", status: "delivered" }
             ];
 
             const chosenEvent = mockEvents[Math.floor(Math.random() * mockEvents.length)];

@@ -97,7 +97,7 @@ export default function PMAssistant({ state, onSaveState, goToTab }: PMAssistant
       const errorMsg: ChatMessage = {
         id: `chat-${Date.now()}-error`,
         role: "model",
-        text: "My neural connection is temporarily restricted. Here is a status overview:\n\n- **Alice Vance** is currently unblocking **Charlie's stepper dashboard (Task-3)** by implementing **Redis locking mechanisms**.\n- **Bob Forrester** is secure webhook authenticator auditing code.\n\nCould I help re-run planning charts or verify secure rules?",
+        text: err instanceof Error ? `Connection Error: ${err.message}` : "My connection to the AI backend is temporarily restricted. Please ensure your API key is correctly configured.",
         timestamp: new Date().toISOString()
       };
       await onSaveState({

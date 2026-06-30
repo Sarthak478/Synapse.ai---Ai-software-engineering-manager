@@ -77,10 +77,16 @@ router.post("/analyze-repo", async (req: any, res) => {
   }
 
   const prompt = `
-  You are an AI Repository Architect. Based on the following repository info, perform a comprehensive software architecture and code analysis.
-  Repository Name: "${name || 'Microservice Hub'}"
+  You are an AI Repository Architect. Based STRICTLY on the following repository info, perform a comprehensive software architecture and code analysis.
+  Repository Name: "${name || 'Unknown Repo'}"
   Repository URL: "${url}"
   Description: "${description}"
+
+  CRITICAL RULES:
+  - ONLY include technologies, databases, and frameworks that are explicitly mentioned in the description above or can be directly inferred from the repository URL/name.
+  - DO NOT hallucinate or guess technologies that are not mentioned. For example, if the description says "Redis" do NOT add "MongoDB". If it says "JavaScript" do NOT add "TypeScript" or "Go".
+  - If the description mentions "JS" or "JavaScript", list "JavaScript" NOT "TypeScript".
+  - Be conservative: only list what you are confident is actually used based on the provided information.
 
   Analyze and output a JSON schema with the exact format:
   {
@@ -97,7 +103,7 @@ router.post("/analyze-repo", async (req: any, res) => {
         { "id": "unique-id", "label": "Human Readable Label", "type": "frontend|gateway|service|database", "x": 100, "y": 150 }
       ],
       "edges": [
-        { "from": "node-id-1", "to": "node-id-2", "label": "e.g. REST API, TCP, SSL" }
+        { "from": "node-id-1", "to": "node-id-2", "label": "e.g. REST API, WebSocket, TCP" }
       ]
     }
   }
@@ -111,39 +117,8 @@ router.post("/analyze-repo", async (req: any, res) => {
   `;
 
   try {
-    const isMock = !req.ai;
-    if (isMock) {
-      // Return a simulated high-quality scan when API Key is missing so app remains perfectly operational
-      const simulatedScan = {
-        stack: ["React", "TypeScript", "Tailwind CSS", "Go", "GraphQL", "MongoDB"],
-        modules: [
-          { name: "Apollo GraphQL Core", type: "gateway", description: "Centralized GraphQL federated gateway handling incoming client schemas.", deps: [] },
-          { name: "Frontend Visual Board", type: "frontend", description: "React-based Single Page Application providing interactive visualizations.", deps: ["Apollo GraphQL Core"] },
-          { name: "Inventory Dispatcher", type: "business-logic", description: "Go-lang backend validating and dispatching real-time inventory queues.", deps: ["Apollo GraphQL Core"] },
-          { name: "Billing Engine", type: "business-logic", description: "Node.js engine processing credit transactions and user invoices.", deps: ["Apollo GraphQL Core"] }
-        ],
-        apis: [
-          { path: "/query", method: "POST", description: "GraphQL main endpoint for visual widgets" },
-          { path: "/inventory/reserve", method: "PUT", description: "Atomic locking of cart contents" }
-        ],
-        databases: ["MongoDB Shared Server"],
-        architecture: {
-          nodes: [
-            { id: "scanned-front", label: "Client Client SPA\n(React TS)", type: "frontend", x: 100, y: 150 },
-            { id: "scanned-gate", label: "Apollo GraphQL Gateway", type: "gateway", x: 300, y: 150 },
-            { id: "scanned-srv-1", label: "Inventory Worker\n(Go Lang)", type: "service", x: 500, y: 80 },
-            { id: "scanned-srv-2", label: "Billing Dispatcher\n(Node.js)", type: "service", x: 500, y: 220 },
-            { id: "scanned-db", label: "Inventory Storage\n(MongoDB)", type: "database", x: 700, y: 150 }
-          ],
-          edges: [
-            { from: "scanned-front", to: "scanned-gate", label: "Query/Mutation" },
-            { from: "scanned-gate", to: "scanned-srv-1", label: "gRPC payload" },
-            { from: "scanned-gate", to: "scanned-srv-2", label: "gRPC dispatch" },
-            { from: "scanned-srv-1", to: "scanned-db", label: "Mongoose Query" }
-          ]
-        }
-      };
-      return res.json(simulatedScan);
+    if (!req.ai) {
+      return res.status(400).json({ error: "Gemini API key is not configured. Please add a valid API key in Settings to enable AI-powered repository analysis." });
     }
 
     const response = await req.ai.models.generateContent({
@@ -213,54 +188,8 @@ router.post("/plan-sprint", async (req: any, res) => {
   `;
 
   try {
-    const isMock = !req.ai;
-    if (isMock) {
-      // Simulated response when API key is unconfigured
-      const simulatedPlan = {
-        tasks: [
-          {
-            id: `task-gen-${Date.now()}-1`,
-            title: "Build OAuth Secure Connection Route",
-            description: "Integrate multi-tenant Google Workspace authentication API. Establish solid session storage structures inside active passport scopes.",
-            priority: "critical" as const,
-            storyPoints: 5,
-            assignedTo: "dev-2",
-            skillsRequired: ["Node.js", "APIs"],
-            blockedBy: [],
-            subtasks: [
-              { id: "sub-g1-1", title: "Setup client parameters and OAuth scopes", done: false },
-              { id: "sub-g1-2", title: "Compose encryption routines on local cookies", done: false }
-            ]
-          },
-          {
-            id: `task-gen-${Date.now()}-2`,
-            title: "OAuth Landing Gate & Account Hub UI Component",
-            description: "Design reactive state dashboards that support multiple login paths. Embed secure visual widgets with Tailwind style profiles.",
-            priority: "high" as const,
-            storyPoints: 3,
-            assignedTo: "dev-3",
-            skillsRequired: ["React", "Tailwind CSS"],
-            blockedBy: [`task-gen-${Date.now()}-1`],
-            subtasks: [
-              { id: "sub-g2-1", title: "Import login routes from auth state", done: false },
-              { id: "sub-g2-2", title: "Framer animations on profile panels", done: false }
-            ]
-          }
-        ],
-        predictedCompletionProbability: 91,
-        delays: [
-          {
-            taskId: `task-gen-${Date.now()}-2`,
-            risk: "medium" as const,
-            reason: "Design task-2 is blocked by OAuth controller integration handled by Bob. Any delay there sets this UI element back."
-          }
-        ],
-        suggestions: [
-          "Encourage early mocking of OAuth endpoints inside React client so Diana can automate flow audits sooner.",
-          "Shift Alice to assist on security parameters if Diana becomes overallocated."
-        ]
-      };
-      return res.json(simulatedPlan);
+    if (!req.ai) {
+      return res.status(400).json({ error: "Gemini API key is not configured. Please add a valid API key in Settings to enable AI-powered sprint planning." });
     }
 
     const response = await req.ai.models.generateContent({
@@ -322,48 +251,8 @@ router.post("/review-code", async (req: any, res) => {
   `;
 
   try {
-    const isMock = !req.ai;
-    if (isMock) {
-      // Mock review response for offline fallback
-      const simulatedReview = {
-        qualityScore: 62,
-        issues: [
-          {
-            type: "vulnerability" as const,
-            severity: "high" as const,
-            message: "Usage of dangerous eval() or unsafe sql binding. The code risks injection vectors.",
-            line: 5,
-            suggestion: "Replace the raw string concatenation with bound pg parameter client statements ($1)."
-          },
-          {
-            type: "performance" as const,
-            severity: "medium" as const,
-            message: "Unnecessary recreation of client connections inside loop limits. Causes database socket exhaust.",
-            line: 12,
-            suggestion: "Instantiate connections globally or leverage node connection pooled states as imports."
-          }
-        ],
-        summary: "This file has critical security challenges (raw SQL concatenation is vulnerable to injections) and bad resource mapping. Refactored database client pools resolve limits.",
-        optimizedCode: `// Optimized Database Gateway Helper
-import pg from 'pg';
-
-const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 20
-});
-
-export async function fetchUserOrders(userId: string) {
-  const query = 'SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC';
-  try {
-    const result = await pool.query(query, [userId]);
-    return result.rows;
-  } catch (error) {
-    console.error('Failed to log orders query safely:', error);
-    throw new Error('Database request error');
-  }
-}`
-      };
-      return res.json(simulatedReview);
+    if (!req.ai) {
+      return res.status(400).json({ error: "Gemini API key is not configured. Please add a valid API key in Settings to enable AI-powered code reviews." });
     }
 
     const response = await req.ai.models.generateContent({
@@ -410,60 +299,15 @@ router.post("/chat", async (req: any, res) => {
 
   Analyse that state objectively. Answer questions in a helpful, concise, engineering-focused tone. 
   If asked about workloads or Bottlenecks, refer back directly to the actual story points and task names in our data!
-  For instance, Alice is handling task-1 (5 pts), Charlie is blocked by task-1 on task-3 (3 pts), Bob is on task-2 (8 pts). Report these numbers clearly.
+  Use the real developer names, task titles, and story points from the data above. Do NOT reference any developers or tasks that are not present in the current state.
   Suggest explicit corrective actions. Keep responses friendly, elegant, and highly structured (use lists and markdown bold states as proper scannable rhythms).
 
   User query: "${message}"
   `;
 
   try {
-    const isMock = !req.ai;
-    if (isMock) {
-      // Return beautiful contextual mock response when offline
-      let answer = "";
-      const lower = message.toLowerCase();
-      if (lower.includes("bottleneck") || lower.includes("block")) {
-        answer = `Our current main **bottleneck** is **Task-3 (Responsive order visualizer)** which is assigned to **Charlie Martinez**. 
-
-- **The Cause**: It is explicitly blocked by **Task-1 (Scalable bulk checkout API)** currently being refactored by **Alice**.
-- **Impact**: Any delays in completing Alice's lock logic hold back Charlie's frontend timeline.
-- **AI Recommendation**: Charlie has spare capacity (currently carrying only 5 workload points compared to his 8-point velocity). I advise routing **Charlie to pair-program on Task-1's integration tests** with Alice today. This will secure the bulk orders setup sooner and immediately unblock Task-3!`;
-      } else if (lower.includes("workload") || lower.includes("allocation") || lower.includes("developer")) {
-        answer = `Here is our current **Developer Workload Allocation & Metrics**:
-
-1. **Bob Forrester** (Backend Specialist):
-   - **Workload Assigned**: 10 Story Points (Active Task: Webhook signature audits).
-   - **Velocity Limit**: 10 Story Points.
-   - **Status**: **Fully loaded (100% boundary)**. No extra capacity should look his path during this sprint iteration.
-
-2. **Alice Vance** (Lead Full Stack Architect):
-   - **Workload Assigned**: 8 Story Points (Active Task: Redis checking locks).
-   - **Velocity Limit**: 12 Story Points.
-   - **Status**: **Healthy (66% capacity)**. Alice has 4 story points of spare room to support other paths.
-
-3. **Charlie Martinez** (Frontend Specialist):
-   - **Workload Assigned**: 5 Story Points (Active Task: Billing Tracking stepper).
-   - **Velocity Limit**: 8 Story Points.
-   - **Status**: **Underallocated (62% capacity) but BLOCKED**. Charlie has developer cycles but cannot complete the active logic until the API is stable.
-
-4. **Diana Sterling** (QA Automation):
-   - **Workload Assigned**: 4 Story Points. 
-   - **Velocity Limit**: 11 Story Points.
-   - **Status**: **Underallocated (36% capacity)**. Diana has substantial spare capacity.`;
-      } else {
-        answer = `I am reviewing our current **SaaS Launchpad - Sprint 1** health metrics:
-
-- **Overall Health Core**: 82% confidence of timely completion.
-- **Sprint Goals**: Enable payment safeguards and Stripe webhooks, optimize check concurrency rates using Redis, and design order shipment dashboards.
-- **Roster Alignment**: Alice, Bob, and Charlie are active, while Diana retains 7 points of extra velocity.
-- **Actions Required**:
-  1. Address the blocker on **Task-3** by pairing Charlie with Alice on Redis tests.
-  2. Complete **Task-2** (cryptographic webhook audits) to allow Diana to launch automated end-to-end integration test suites.
-
-How can I assist you further with task tracking, code review templates, or timeline adjustments?`;
-      }
-
-      return res.json({ text: answer });
+    if (!req.ai) {
+      return res.status(400).json({ error: "Gemini API key is not configured. Please add a valid API key in Settings to enable the AI PM Assistant." });
     }
 
     const response = await req.ai.models.generateContent({
@@ -497,7 +341,7 @@ router.post("/morale-check", async (req: any, res) => {
   ${JSON.stringify(state.standups, null, 2)}
   ===========================================
 
-  Analyse the workload points relative to their velocity limits. Identify who is under pressure (e.g. Bob Forrester is 100% loaded at 10/10 SP with critical Stripe webhook audits; Alice Vance is 8/12 SP; Charlie Martinez is blocked on code checkouts and expressed friction). Identify who is blocked, stressed, or underutilized.
+  Analyse the workload points relative to their velocity limits. Use the real developer names, task titles, and numbers from the data above. Do NOT reference any developers or tasks that are not present in the current state. Identify who is under pressure, blocked, stressed, or underutilized.
   
   Generate a comprehensive Morale & Burnout Report. Output exactly as a JSON schema of the format:
   {
@@ -506,7 +350,7 @@ router.post("/morale-check", async (req: any, res) => {
     "developerMorale": [
       {
         "id": "dev-1", // Must match a developer's ID
-        "name": "Alice Vance",
+        "name": "Developer Name",
         "burnoutScore": 45, // Burnout probability out of 100
         "status": "Low Risk|Moderate Risk|High Burnout Risk",
         "mood": "Focused|Anxious|Blocked|Overloaded|Calm",
@@ -523,53 +367,8 @@ router.post("/morale-check", async (req: any, res) => {
   `;
 
   try {
-    const isMock = !req.ai;
-    if (isMock) {
-      // High quality situational mock data matching current DB state exactly
-      const simulatedMorale = {
-        teamSentimentScore: 74,
-        teamSentimentStatus: "Constrained on Critical Path",
-        developerMorale: [
-          {
-            id: "dev-1",
-            name: "Alice Vance",
-            burnoutScore: 50,
-            status: "Moderate Risk",
-            mood: "Focused",
-            narrative: "Alice is currently managing the bulk order checkout implementation (Task-1). While she has some capacity remaining (8/12 SP), she is carrying the weight of unblocking Charlie's frontend progress."
-          },
-          {
-            id: "dev-2",
-            name: "Bob Forrester",
-            burnoutScore: 82,
-            status: "High Burnout Risk",
-            mood: "Overloaded",
-            narrative: "Bob is 100% fully allocated (10/10 SP) on critical security audits for Stripe checkout webhooks. Standups show high complexity. He requires immediate reviews of incoming PRs to alleviate pressure."
-          },
-          {
-            id: "dev-3",
-            name: "Charlie Martinez",
-            burnoutScore: 65,
-            status: "Moderate Risk",
-            mood: "Blocked",
-            narrative: "Charlie is underallocated at 5/8 SP but is currently completely blocked from completing Task-3 until Alice delivers the API locks. The resulting workflow delay is causing developmental friction."
-          },
-          {
-            id: "dev-4",
-            name: "Diana Sterling",
-            burnoutScore: 30,
-            status: "Low Risk",
-            mood: "Calm",
-            narrative: "Diana has substantial spare headroom (4/11 SP assigned) and is focused on security audits and automated QA test suites. She represents premium unutilized buffering capacity."
-          }
-        ],
-        recommendations: [
-          "Urgent load shedding: Shift secondary verification duties from Bob to Diana Sterling to prevent Bob's burnout.",
-          "Blocker resolution: Enable Charlie Martinez to pair-program with Alice Vance on Task-1 to accelerate API stability and unblock Task-3.",
-          "Capacity matching: Distribute new requirements to Diana Sterling who holds high-velocity buffer Room."
-        ]
-      };
-      return res.json(simulatedMorale);
+    if (!req.ai) {
+      return res.status(400).json({ error: "Gemini API key is not configured. Please add a valid API key in Settings to enable AI-powered morale analysis." });
     }
 
     const response = await req.ai.models.generateContent({

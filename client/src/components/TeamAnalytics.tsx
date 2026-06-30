@@ -135,53 +135,10 @@ export default function TeamAnalytics({ state, onSaveState, goToTab }: TeamAnaly
     runMoraleDiagnostic(false);
   }, []);
 
-  // Actionable mitigation application handler
+  // Actionable mitigation application handler (dynamically disabled for demo)
   const handleApplySafeguard = async (type: string) => {
-    if (type === "diana-shift") {
-      // Shifting secondary verification tasks from Bob (dev-2) to Diana (dev-4)
-      const updatedTasks = state.tasks.map(t => {
-        if (t.id === "task-2") {
-          return { ...t, assignedTo: "dev-4" };
-        }
-        return t;
-      });
-
-      const updatedDevs = state.developers.map(d => {
-        const devTasks = updatedTasks.filter(t => t.assignedTo === d.id);
-        const points = devTasks.reduce((sum, t) => sum + t.storyPoints, 0);
-        return { ...d, workloadPoints: points };
-      });
-
-      await onSaveState({
-        ...state,
-        tasks: updatedTasks,
-        developers: updatedDevs
-      });
-      setAppliedAction("diana-shift");
-    } else if (type === "charlie-pair") {
-      // Enable pairing on task-1 (Redis Locks) to unblock Charlie's task-3
-      const updatedTasks = state.tasks.map(t => {
-        if (t.id === "task-3") {
-          return { ...t, blockedBy: [] }; // Remove blocker
-        }
-        return t;
-      });
-
-      const updatedSprints = state.sprints.map(s => {
-        return {
-          ...s,
-          delays: s.delays.filter(d => d.taskId !== "task-3"),
-          predictedCompletionProbability: 92
-        };
-      });
-
-      await onSaveState({
-        ...state,
-        tasks: updatedTasks,
-        sprints: updatedSprints
-      });
-      setAppliedAction("charlie-pair");
-    }
+    // Dynamic safeguard implementations will go here
+    console.log("Safeguard logic is dynamically populated based on active AI context.");
   };
 
   // Compute stats for charts and summaries
@@ -518,9 +475,7 @@ export default function TeamAnalytics({ state, onSaveState, goToTab }: TeamAnaly
                   </div>
                   <div>
                     <span className="text-[10px] uppercase font-mono font-bold text-slate-400 block mb-0.5">Focus Heat alert</span>
-                    <span className="text-xs font-bold text-slate-800 tracking-tight block mt-1">
-                      {moraleReport.developerMorale?.find((d: any) => d.burnoutScore >= 75)?.name || "Bob Forrester"}
-                    </span>
+                      {moraleReport.developerMorale?.find((d: any) => d.burnoutScore >= 75)?.name || "No Critical Strain"}
                     <span className="text-[10px] text-red-600 block font-mono font-bold mt-1.5 uppercase animate-pulse">
                       ▲ Critical Strain Alert
                     </span>
@@ -585,73 +540,33 @@ export default function TeamAnalytics({ state, onSaveState, goToTab }: TeamAnaly
                 </div>
               </div>
 
-              {/* Mitigation Recommendations list */}
-              <div className="border-t border-slate-100 pt-4 mt-1 text-left font-sans">
-                <span className="text-[10px] font-mono uppercase font-bold text-slate-455 block mb-3 flex items-center gap-1 font-sans">
-                  <Activity className="h-3.5 w-3.5 text-indigo-600" />
-                  AGILE MITIGATIONS & ACTIONABLE CORRECTIONS
-                </span>
-                
-                <div className="flex flex-col gap-2.5 font-sans">
-                  {/* Recommendation A: Shift payload */}
-                  <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-start gap-2.5">
-                      <div className="p-1.5 bg-rose-50 rounded border border-rose-100 shrink-0 mt-0.5">
-                        <Flame className="h-4 w-4 text-rose-500" />
+              {/* Mitigation Recommendations list dynamically generated from morale report */}
+              {moraleReport.recommendations && moraleReport.recommendations.length > 0 && (
+                <div className="border-t border-slate-100 pt-4 mt-1 text-left font-sans">
+                  <span className="text-[10px] font-mono uppercase font-bold text-slate-455 block mb-3 flex items-center gap-1 font-sans">
+                    <Activity className="h-3.5 w-3.5 text-indigo-600" />
+                    AGILE MITIGATIONS & ACTIONABLE CORRECTIONS
+                  </span>
+                  
+                  <div className="flex flex-col gap-2.5 font-sans">
+                    {moraleReport.recommendations.map((rec: string, index: number) => (
+                      <div key={index} className="p-4 bg-slate-50 border border-slate-200/60 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-start gap-2.5">
+                          <div className="p-1.5 bg-indigo-50 rounded border border-indigo-100 shrink-0 mt-0.5">
+                            <Activity className="h-4 w-4 text-indigo-500" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-bold text-slate-855 leading-normal block">AI Recommendation</span>
+                            <p className="text-[10.5px] text-slate-450 mt-1 leading-normal font-sans">
+                              {rec}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-xs font-bold text-slate-855 leading-normal block">Load shedding: Alleviate Bob Forrester</span>
-                        <p className="text-[10.5px] text-slate-450 mt-1 leading-normal font-sans">
-                          Bob is fully allocated at 10/10 SP with critical Stripe webhook tasks. Re-allocate secondary signature checks to Diana Sterling (QA & Security Auditor).
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleApplySafeguard("diana-shift")}
-                      disabled={appliedAction === "diana-shift" || state.tasks.find(t => t.id === "task-2")?.assignedTo === "dev-4"}
-                      className={`px-3 py-1.5 font-bold text-[10.5px] rounded-lg transition-all shrink-0 cursor-pointer ${
-                        appliedAction === "diana-shift" || state.tasks.find(t => t.id === "task-2")?.assignedTo === "dev-4"
-                          ? "bg-slate-105 text-slate-400 border border-slate-200 cursor-not-allowed"
-                          : "bg-slate-900 text-white hover:bg-slate-800"
-                      }`}
-                    >
-                      {appliedAction === "diana-shift" || state.tasks.find(t => t.id === "task-2")?.assignedTo === "dev-4"
-                        ? "✓ Work Shedded"
-                        : "Apply Balancing Shift"}
-                    </button>
-                  </div>
-
-                  {/* Recommendation B: Pair Charlie on lock APIs */}
-                  <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-lg flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans">
-                    <div className="flex items-start gap-2.5">
-                      <div className="p-1.5 bg-indigo-50 rounded border border-indigo-100 shrink-0 mt-0.5">
-                        <Users className="h-4 w-4 text-indigo-500" />
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold text-slate-855 leading-normal block">Blocker Mitigation: Pair Charlie with Alice</span>
-                        <p className="text-[10.5px] text-slate-450 mt-1 leading-normal font-sans">
-                          Charlie is blocked from shipping stepper layout. Deploy a collaborative pairing session on Alice's lock logic to unblock critical path and resolve friction.
-                        </p>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleApplySafeguard("charlie-pair")}
-                      disabled={appliedAction === "charlie-pair" || state.tasks.find(t => t.id === "task-3")?.blockedBy?.length === 0}
-                      className={`px-3 py-1.5 font-bold text-[10.5px] rounded-lg transition-all shrink-0 cursor-pointer ${
-                        appliedAction === "charlie-pair" || state.tasks.find(t => t.id === "task-3")?.blockedBy?.length === 0
-                          ? "bg-slate-105 text-slate-450 border border-slate-200 cursor-not-allowed"
-                          : "bg-indigo-600 text-white hover:bg-indigo-550"
-                      }`}
-                    >
-                      {appliedAction === "charlie-pair" || state.tasks.find(t => t.id === "task-3")?.blockedBy?.length === 0
-                        ? "✓ Safeguard Engaged"
-                        : "Deploy Pairing Guide"}
-                    </button>
+                    ))}
                   </div>
                 </div>
-              </div>
+              )}
 
             </div>
           )}

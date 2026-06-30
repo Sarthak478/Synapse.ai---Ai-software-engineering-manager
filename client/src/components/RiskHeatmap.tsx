@@ -161,11 +161,9 @@ export default function RiskHeatmap({ state, goToTab }: RiskHeatmapProps) {
       else if (riskScore >= 40) riskLevel = "medium";
 
       // Match a likely developer to the module role
-      let assignee = devs[0]; // Alice Arch
-      if (nameLower.includes("stripe") || nameLower.includes("auth") || nameLower.includes("cache")) {
-        assignee = devs.find(d => d.id === "dev-2") || devs[0]; // Bob
-      } else if (nameLower.includes("client") || type.includes("ui")) {
-        assignee = devs.find(d => d.id === "dev-3") || devs[0]; // Charlie
+      let assignee = devs[0];
+      if (devs.length > 1) {
+        assignee = devs[idx % devs.length];
       }
 
       return {

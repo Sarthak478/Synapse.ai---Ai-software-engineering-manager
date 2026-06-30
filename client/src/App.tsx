@@ -282,9 +282,9 @@ export default function App() {
     }
   };
 
-  // Reset database state totally back to initial parameters
+  // Reset database state — clears all project data
   const handleResetDatabase = async () => {
-    if (!window.confirm("Are you sure you want to reset all sprint plans, repositories, and logs back to default demo logs?")) return;
+    if (!window.confirm("Are you sure you want to clear all sprint plans, repositories, tasks, and logs? This cannot be undone.")) return;
     if (!sessionToken) return;
     setIsSyncing(true);
     try {

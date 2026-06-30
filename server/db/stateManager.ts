@@ -38,24 +38,7 @@ function sanitizeDevForDisk(d: any): any {
 }
 
 export const defaultState = {
-  developers: [
-    {
-      id: "dev-1",
-      name: "Alice Vance",
-      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150",
-      email: "alice@company.com",
-      role: "Lead Full Stack Architect",
-      skills: ["React", "Express", "Node.js", "System Architecture", "PostgreSQL", "AWS"],
-      workloadPoints: 8,
-      velocity: 12,
-      activeTaskId: "task-1",
-      isHead: true,
-      userId: "alice",
-      password: "password123",
-      personalCredentials: {},
-      contributions: { commits: 45, PRs: 12, reviews: 28 }
-    }
-  ],
+  developers: [] as any[],
   settings: {
     geminiApiKeyHash: ""
   }
@@ -68,19 +51,16 @@ export async function getState() {
     const devs = await Developer.find({}).lean();
     let settingsDoc = await Settings.findOne({ id: "global-settings" }).lean();
     
-    // Initial seed if empty
-    if (devs.length === 0 && !settingsDoc) {
-      console.log("Seeding default database state...");
-      const seededDevs = defaultState.developers.map(d => ({
-        ...d,
-        password: hashPasswordSync(d.password)
-      }));
-      await Developer.insertMany(seededDevs);
-      
+    // Initial setup: create settings document if it doesn't exist yet
+    if (!settingsDoc) {
+      console.log("Initializing fresh workspace (no developers yet)...");
       settingsDoc = await Settings.create({ id: "global-settings", geminiApiKeyHash: "" });
-      
+    }
+
+    // If no developers exist yet, return empty state (first user will register via /register)
+    if (devs.length === 0) {
       return {
-        developers: seededDevs,
+        developers: [],
         settings: { geminiApiKeyHash: settingsDoc.geminiApiKeyHash }
       };
     }
@@ -94,7 +74,7 @@ export async function getState() {
         docUpdated = true;
       }
       if (!d.password) {
-        d.password = hashPasswordSync("password123");
+        d.password = hashPasswordSync("changeme");
         docUpdated = true;
       }
       // SECURITY FIX #1: Auto-migrate any un-hashed plain-text password to bcrypt

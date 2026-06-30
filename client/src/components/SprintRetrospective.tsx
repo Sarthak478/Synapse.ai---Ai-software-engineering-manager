@@ -531,7 +531,7 @@ export default function SprintRetrospective({ state, goToTab }: any) {
                         </span>
                       </div>
                       <span className="text-[10px] font-mono text-indigo-650 bg-indigo-50/60 px-1.5 py-0.5 rounded shrink-0">
-                        Assignee: Alice Arch
+                        Assignee: Unassigned
                       </span>
                     </div>
 
@@ -555,7 +555,7 @@ export default function SprintRetrospective({ state, goToTab }: any) {
                         </span>
                       </div>
                       <span className="text-[10px] font-mono text-indigo-650 bg-indigo-50/60 px-1.5 py-0.5 rounded shrink-0">
-                        Assignee: Bob Backend
+                        Assignee: Unassigned
                       </span>
                     </div>
 
@@ -579,7 +579,7 @@ export default function SprintRetrospective({ state, goToTab }: any) {
                         </span>
                       </div>
                       <span className="text-[10px] font-mono text-indigo-650 bg-indigo-50/60 px-1.5 py-0.5 rounded shrink-0">
-                        Assignee: Charlie Client
+                        Assignee: Unassigned
                       </span>
                     </div>
 

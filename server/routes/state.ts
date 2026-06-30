@@ -143,7 +143,7 @@ router.post("/save", async (req: any, res: any) => {
         }
 
         // SECURITY FIX #1: Always hash the default password before storing new developers
-        const rawPassword = incomingDev.password || "password123";
+        const rawPassword = incomingDev.password || "changeme";
 
         updatedDevs.push({
           id: incomingDev.id,
@@ -182,18 +182,15 @@ router.post("/reset", async (req: any, res: any) => {
     return res.status(403).json({ error: "Access Denied: Only a Team Head can reset the enterprise database." });
   }
 
-  // Hash all default passwords before resetting
-  const hashedDefault = {
-    ...defaultState,
-    developers: defaultState.developers.map((d) => ({
-      ...d,
-      password: hashPasswordSync(d.password)
-    }))
+  // Reset clears project settings but preserves developer accounts
+  const resetState = {
+    developers: dbState.developers, // Keep existing accounts
+    settings: { geminiApiKeyHash: "" }
   };
-  await saveState(hashedDefault);
+  await saveState(resetState);
 
   // SECURITY FIX #5: Return only whitelisted fields
-  res.json({ success: true, state: buildSafeState(hashedDefault) });
+  res.json({ success: true, state: buildSafeState(resetState) });
 });
 
 export default router;

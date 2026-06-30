@@ -83,7 +83,7 @@ export default function Sidebar({
   const [newSkills, setNewSkills] = useState("");
   const [registerAsHead, setRegisterAsHead] = useState(false);
   const [newUserId, setNewUserId] = useState("");
-  const [newPassword, setNewPassword] = useState("password123");
+  const [newPassword, setNewPassword] = useState("");
 
   // Edit profile state (for self-editing active dev credentials & password)
   const [editName, setEditName] = useState("");
@@ -110,7 +110,7 @@ export default function Sidebar({
       setEditRole(activeDev.role);
       setEditEmail(activeDev.email || "");
       setEditSkills(activeDev.skills?.join(", ") || "");
-      setEditPassword(activeDev.password || "password123");
+      setEditPassword(activeDev.password || "");
       setEditJiraDomain(activeDev.personalCredentials?.jiraDomain || "");
       setEditApiToken(activeDev.personalCredentials?.apiToken || "");
       setEditGithubToken(activeDev.personalCredentials?.githubToken || "");
@@ -175,7 +175,7 @@ export default function Sidebar({
     setNewEmail("");
     setNewSkills("");
     setNewUserId("");
-    setNewPassword("password123");
+    setNewPassword("");
     setRegisterAsHead(false);
     setShowProfileModal(false);
     showToast(`✓ Member ${newDevObj.name} registered with User ID: ${cleanUserId}!`);
@@ -348,7 +348,7 @@ export default function Sidebar({
           className="w-full flex items-center justify-center gap-2 py-1.5 px-3 border border-[#3D2E24] bg-[#251A13]/40 rounded hover:bg-[#3D2E24] transition-colors duration-150 text-[10.5px] text-slate-400 hover:text-white font-bold cursor-pointer font-sans"
         >
           <RefreshCw className="h-2.5 w-2.5" />
-          Reset Demo Logs
+          Clear Project Data
         </button>
       </div>
 
@@ -375,7 +375,11 @@ export default function Sidebar({
             <div className="text-xs">
               <div className="text-white font-bold leading-none flex items-center gap-1">
                 {activeDev ? activeDev.name : "Unauthenticated"}
-                {activeDev?.isHead && <Crown className="h-3 w-3 text-amber-400" title="Team Head / Lead" />}
+                {activeDev?.isHead && (
+                  <span title="Team Head / Lead">
+                    <Crown className="h-3 w-3 text-amber-400" />
+                  </span>
+                )}
                 <span className="h-1.5 w-1.5 bg-teal-400 rounded-full animate-pulse"></span>
               </div>
               <div className="text-slate-500 font-mono mt-1 leading-none text-[10px] flex items-center gap-1">
@@ -626,7 +630,7 @@ export default function Sidebar({
                     <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
                     <div className="text-left font-sans">
                       <span className="font-bold block text-white">Access Denied (Requires Team Head)</span>
-                      Only users with active Team Head credentials (such as **Alice Vance**) can register new members to prevent arbitrary seat creation. Log in as a Team Head to access.
+                      Only users with active Team Head credentials can register new members to prevent arbitrary seat creation. Log in as a Team Head to access.
                     </div>
                   </div>
                 ) : (

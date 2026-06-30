@@ -421,7 +421,7 @@ export default function DashboardOverview({ state, goToTab }: DashboardOverviewP
               </div>
               <h4 className="text-lg font-bold tracking-tight text-white mb-2 leading-snug">Current Sprints Diagnostics</h4>
               <p className="text-slate-400 text-xs leading-relaxed">
-                "Our primary challenge is streamlining Alice's bulk order Redis logic (<strong>Task-1</strong>), which is holding back Charlie's shipping Timeline stepper (<strong>Task-3</strong>)."
+                "Our primary challenge is streamlining the backend API logic (<strong>Task-1</strong>), which is holding back the frontend UI implementation (<strong>Task-3</strong>)."
               </p>
 
               <div className="flex flex-col gap-2.5 mt-5 font-sans">
@@ -429,14 +429,14 @@ export default function DashboardOverview({ state, goToTab }: DashboardOverviewP
                   <AlertCircle className="h-4 w-4 text-indigo-400 mt-0.5 shrink-0" />
                   <div>
                     <span className="block text-[10px] font-mono text-slate-500 leading-none">AI SUGGESTION 1</span>
-                    <p className="text-[11px] text-slate-350 mt-1 leading-snug">Deploy Charlie to assist Alice on integration tests for Redis to unblock UI construction.</p>
+                    <p className="text-[11px] text-slate-350 mt-1 leading-snug">Deploy frontend engineers to assist on integration tests for the backend to unblock UI construction.</p>
                   </div>
                 </div>
                 <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800 flex items-start gap-2 text-left">
                   <AlertCircle className="h-4 w-4 text-indigo-400 mt-0.5 shrink-0" />
                   <div>
                     <span className="block text-[10px] font-mono text-slate-500 leading-none">AI SUGGESTION 2</span>
-                    <p className="text-[11px] text-slate-350 mt-1 leading-snug">Task Bob to complete his cryptographic Stripe webhook audits so security levels clear QA checks.</p>
+                    <p className="text-[11px] text-slate-350 mt-1 leading-snug">Task the security lead to complete cryptographic webhook audits so security levels clear QA checks.</p>
                   </div>
                 </div>
               </div>
