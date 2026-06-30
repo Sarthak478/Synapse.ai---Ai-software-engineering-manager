@@ -110,7 +110,8 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
         },
         body: JSON.stringify({
           name: newRepoName,
@@ -118,8 +119,14 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
           description: newRepoDesc
         })
       });
-
-      if (!response.ok) throw new Error("Repocan scan failed");
+      if (!response.ok) {
+        let errMsg = "Repo scan failed";
+        try {
+          const errData = await response.json();
+          errMsg = errData.error || errMsg;
+        } catch (e) {}
+        throw new Error(errMsg);
+      }
       const data = await response.json();
 
       const newRepo: Repository = {
@@ -145,9 +152,9 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
       setNewRepoName("");
       setNewRepoUrl("");
       setNewRepoDesc("");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Failed connecting to repo analysis engine. Reverting to automated heuristics scan.");
+      alert(err.message || "Failed connecting to repo analysis engine.");
     } finally {
       setIsScanning(false);
     }
@@ -167,7 +174,8 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
         },
         body: JSON.stringify({
           name: repo.name,
@@ -175,8 +183,14 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
           description: repo.description
         })
       });
-
-      if (!response.ok) throw new Error("Repocan scan failed");
+      if (!response.ok) {
+        let errMsg = "Repo scan failed";
+        try {
+          const errData = await response.json();
+          errMsg = errData.error || errMsg;
+        } catch (e) {}
+        throw new Error(errMsg);
+      }
       const data = await response.json();
 
       const updatedRepos = state.repositories.map(r => {
@@ -210,7 +224,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
       <ApiKeyRequiredModal
         isOpen={showApiKeyModal}
         onClose={() => setShowApiKeyModal(false)}
-        onGoToSettings={() => goToTab?.("dashboard")}
+        onGoToSettings={() => goToTab?.("settings")}
         featureName="AI Repository Intelligence Scanner"
       />
       
@@ -602,7 +616,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                         <span className="text-xs font-bold text-slate-800 tracking-tight">{mod.name}</span>
                         <span className="text-[10px] font-mono text-slate-400 uppercase">{mod.type}</span>
                       </div>
-                      <p className="text-xs text-slate-500 mt-1 font-sans">Core file structure mapping references and logic bindings.</p>
+                      <p className="text-xs text-slate-500 mt-1 font-sans leading-relaxed">{mod.description || "Core file structure mapping references and logic bindings."}</p>
                     </div>
                     {mod.deps.length > 0 && (
                       <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-155 mt-3 flex-wrap font-sans">

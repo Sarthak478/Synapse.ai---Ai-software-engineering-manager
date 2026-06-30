@@ -28,20 +28,20 @@ function buildSafeState(dbState: any) {
 }
 
 // Obtain complete applet database state (requires token, strips passwords and all sensitive fields via whitelist)
-router.get("/", (req: any, res: any) => {
-  const dbState = getState();
+router.get("/", async (req: any, res: any) => {
+  const dbState = await getState();
   res.json(buildSafeState(dbState));
 });
 
 // Update applet database state (requires token, merges safely preserving credentials)
-router.post("/save", (req: any, res: any) => {
+router.post("/save", async (req: any, res: any) => {
   const currentDevId = req.userDevId;
   const incomingState = req.body;
   if (!incomingState) {
     return res.status(400).json({ error: "Invalid state payload" });
   }
 
-  const dbState = getState();
+  const dbState = await getState();
 
   // 0. Update settings (only Head can configure Gemini Key Hash)
   if (incomingState.settings) {
@@ -166,16 +166,16 @@ router.post("/save", (req: any, res: any) => {
     dbState.developers = updatedDevs;
   }
 
-  saveState(dbState);
+  await saveState(dbState);
 
   // SECURITY FIX #5: Return only whitelisted fields
   res.json({ success: true, state: buildSafeState(dbState) });
 });
 
 // Reset database state back to default (only Team Head allowed)
-router.post("/reset", (req: any, res: any) => {
+router.post("/reset", async (req: any, res: any) => {
   const currentDevId = req.userDevId;
-  const dbState = getState();
+  const dbState = await getState();
   const activeDev = dbState.developers.find((d: any) => d.id === currentDevId);
 
   if (!activeDev || !activeDev.isHead) {
@@ -190,7 +190,7 @@ router.post("/reset", (req: any, res: any) => {
       password: hashPasswordSync(d.password)
     }))
   };
-  saveState(hashedDefault);
+  await saveState(hashedDefault);
 
   // SECURITY FIX #5: Return only whitelisted fields
   res.json({ success: true, state: buildSafeState(hashedDefault) });

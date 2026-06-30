@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
+import cors from "cors";
 
 // Import Custom Middlewares
 import { securityMiddleware, errorBoundary } from "./middlewares/security.js";
@@ -16,10 +16,13 @@ import geminiRouter from "./routes/gemini.js";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3001;
 
 // 1. Core Request Parsers
 app.use(express.json({ limit: "20mb" }));
+
+// Enable CORS for frontend integration
+app.use(cors());
 
 // 2. Security Filtering & Custom headers
 app.use(securityMiddleware);
@@ -41,23 +44,8 @@ app.get("/api/health", (req, res) => {
 // 4. Global Server Error Boundary
 app.use(errorBoundary);
 
-// 5. Setup Vite Dev Middleware or Serve Production Static Bundle
+// 5. Start Backend Server
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-      root: path.join(process.cwd(), "client"),
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "client", "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
-
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`====================================================`);
     console.log(` SYNAPSE ENTERPRISE GATEWAY BOOTED SUCCESSFULLY     `);

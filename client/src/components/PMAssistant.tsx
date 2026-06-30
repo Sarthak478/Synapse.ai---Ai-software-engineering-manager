@@ -69,7 +69,8 @@ export default function PMAssistant({ state, onSaveState, goToTab }: PMAssistant
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
         },
         body: JSON.stringify({
           message: rawText,
@@ -130,7 +131,7 @@ export default function PMAssistant({ state, onSaveState, goToTab }: PMAssistant
       <ApiKeyRequiredModal
         isOpen={showApiKeyModal}
         onClose={() => setShowApiKeyModal(false)}
-        onGoToSettings={() => goToTab?.("dashboard")}
+        onGoToSettings={() => goToTab?.("settings")}
         featureName="AI PM Assistant Chat"
       />
       

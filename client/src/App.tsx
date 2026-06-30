@@ -51,6 +51,7 @@ function saveLocalProjectData(state: any) {
 export default function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [currentTab, setCurrentTab] = useState<string>("dashboard");
+  const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -119,8 +120,10 @@ export default function App() {
       await handleSaveState({
         ...state,
         settings: {
+          ...state.settings,
           hasGeminiApiKey: true,
-          geminiApiKeyHash: hash
+          geminiApiKeyHash: hash,
+          geminiApiKey: rawKey
         } as any
       });
     } else if (rawKey === "") {
@@ -128,8 +131,10 @@ export default function App() {
       await handleSaveState({
         ...state,
         settings: {
+          ...state.settings,
           hasGeminiApiKey: false,
-          geminiApiKeyHash: ""
+          geminiApiKeyHash: "",
+          geminiApiKey: ""
         } as any
       });
     }
@@ -318,6 +323,14 @@ export default function App() {
     }
   };
 
+  const handleGoToTab = (tab: string) => {
+    if (tab === "settings") {
+      setShowProfileModal(true);
+    } else {
+      setCurrentTab(tab);
+    }
+  };
+
   // ENFORCE AUTHENTICATION: Show LoginScreen if not authenticated
   if (!sessionToken || !activeDevId) {
     return (
@@ -375,6 +388,8 @@ export default function App() {
         onUpdateDeveloper={handleUpdateDeveloper}
         settings={state.settings}
         onUpdateSettings={handleUpdateSettings}
+        showProfileModal={showProfileModal}
+        setShowProfileModal={setShowProfileModal}
       />
 
       {/* Main viewport area */}
@@ -442,12 +457,12 @@ export default function App() {
             transition={{ duration: 0.16 }}
             className="w-full"
           >
-            {currentTab === "dashboard" && <DashboardOverview state={state} goToTab={setCurrentTab} />}
-            {currentTab === "repos" && <RepoIntelligence state={state} onSaveState={handleSaveState} goToTab={setCurrentTab} />}
-            {currentTab === "sprints" && <SprintPlanner state={state} onSaveState={handleSaveState} goToTab={setCurrentTab} activeDevId={activeDevId} />}
-            {currentTab === "reviewer" && <CodeReviewer state={state} onSaveState={handleSaveState} goToTab={setCurrentTab} />}
-            {currentTab === "analytics" && <TeamAnalytics state={state} onSaveState={handleSaveState} goToTab={setCurrentTab} />}
-            {currentTab === "assistant" && <PMAssistant state={state} onSaveState={handleSaveState} goToTab={setCurrentTab} />}
+            {currentTab === "dashboard" && <DashboardOverview state={state} goToTab={handleGoToTab} />}
+            {currentTab === "repos" && <RepoIntelligence state={state} onSaveState={handleSaveState} goToTab={handleGoToTab} />}
+            {currentTab === "sprints" && <SprintPlanner state={state} onSaveState={handleSaveState} goToTab={handleGoToTab} activeDevId={activeDevId} />}
+            {currentTab === "reviewer" && <CodeReviewer state={state} onSaveState={handleSaveState} goToTab={handleGoToTab} />}
+            {currentTab === "analytics" && <TeamAnalytics state={state} onSaveState={handleSaveState} goToTab={handleGoToTab} />}
+            {currentTab === "assistant" && <PMAssistant state={state} onSaveState={handleSaveState} goToTab={handleGoToTab} />}
             {currentTab === "standups" && <DailyStandups state={state} onSaveState={handleSaveState} />}
           </motion.div>
         </div>

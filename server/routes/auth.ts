@@ -5,13 +5,13 @@ import { createToken } from "../middlewares/auth.js";
 const router = Router();
 
 // Login and obtain a secure session token
-router.post("/login", (req, res) => {
+router.post("/login", async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password are required." });
   }
 
-  const dbState = getState();
+  const dbState = await getState();
   const cleanUser = username.trim().toLowerCase();
   const matchedDev = dbState.developers.find(
     (dev: any) => dev.userId?.toLowerCase() === cleanUser
@@ -40,8 +40,8 @@ router.post("/login", (req, res) => {
 });
 
 // Public list of developers (passwords and credentials fully stripped for security)
-router.get("/developers", (req, res) => {
-  const dbState = getState();
+router.get("/developers", async (req, res) => {
+  const dbState = await getState();
   const publicDevs = dbState.developers.map((d: any) => ({
     id: d.id,
     name: d.name,

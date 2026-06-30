@@ -113,7 +113,8 @@ export default function TeamAnalytics({ state, onSaveState, goToTab }: TeamAnaly
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
         }
       });
 
@@ -192,7 +193,7 @@ export default function TeamAnalytics({ state, onSaveState, goToTab }: TeamAnaly
       <ApiKeyRequiredModal
         isOpen={showApiKeyModal}
         onClose={() => setShowApiKeyModal(false)}
-        onGoToSettings={() => goToTab?.("dashboard")}
+        onGoToSettings={() => goToTab?.("settings")}
         featureName="AI Team Morale & Burnout Check"
       />
       

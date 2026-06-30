@@ -20,7 +20,8 @@ import {
   Crown,
   Trash2,
   Settings,
-  AlertCircle
+  AlertCircle,
+  ExternalLink
 } from "lucide-react";
 import { Developer } from "../types";
 
@@ -38,6 +39,8 @@ interface SidebarProps {
   onUpdateDeveloper: (dev: Developer) => Promise<void>;
   settings?: any;
   onUpdateSettings?: (updatedSettings: any) => Promise<void>;
+  showProfileModal: boolean;
+  setShowProfileModal: (val: boolean) => void;
 }
 
 export default function Sidebar({
@@ -53,7 +56,9 @@ export default function Sidebar({
   onRemoveDeveloper,
   onUpdateDeveloper,
   settings,
-  onUpdateSettings
+  onUpdateSettings,
+  showProfileModal,
+  setShowProfileModal
 }: SidebarProps) {
   const projectPulseTabs = [
     { id: "dashboard", label: "Overview Dashboard", icon: LayoutDashboard },
@@ -69,7 +74,6 @@ export default function Sidebar({
   ];
 
   // Dynamic profile states
-  const [showProfileModal, setShowProfileModal] = useState<boolean>(false);
   const [profileTab, setProfileTab] = useState<"claim" | "register">("claim"); // "claim" will be "My Session"
   
   // Registration state
@@ -91,6 +95,7 @@ export default function Sidebar({
   const [editApiToken, setEditApiToken] = useState("");
   const [editGithubToken, setEditGithubToken] = useState("");
   const [editCustomEndpoint, setEditCustomEndpoint] = useState("");
+  const [editGeminiKey, setEditGeminiKey] = useState("");
 
   // Toast notifications for Clipboard & Actions
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -111,7 +116,10 @@ export default function Sidebar({
       setEditGithubToken(activeDev.personalCredentials?.githubToken || "");
       setEditCustomEndpoint(activeDev.personalCredentials?.customEndpoint || "");
     }
-  }, [activeDev, showProfileModal]);
+    if (settings) {
+      setEditGeminiKey(settings.geminiApiKey || "");
+    }
+  }, [activeDev, settings, showProfileModal]);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -194,6 +202,9 @@ export default function Sidebar({
     };
 
     await onUpdateDeveloper(updatedDevObj);
+    if (onUpdateSettings) {
+      await onUpdateSettings({ geminiApiKey: editGeminiKey.trim() });
+    }
     setShowProfileModal(false);
     showToast("✓ Personal Profile & Keys Saved!");
   };
@@ -544,15 +555,38 @@ export default function Sidebar({
                     </div>
 
                     <div>
-                      <label className="text-[9px] font-mono font-bold text-slate-400 uppercase block mb-1">
-                        Jira API Token
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[9px] font-mono font-bold text-slate-400 uppercase">
+                          Jira API Token
+                        </label>
+                        <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" className="text-[8px] font-mono text-teal-500/70 hover:text-teal-400 flex items-center gap-0.5 transition-colors" tabIndex={-1}>
+                          Get Token <ExternalLink className="h-2 w-2" />
+                        </a>
+                      </div>
                       <input
                         type="password"
                         value={editApiToken}
                         onChange={(e) => setEditApiToken(e.target.value)}
                         placeholder="••••••••••••"
                         className="w-full text-xs p-2.5 bg-[#251A13] border border-[#3D2E24] rounded-lg focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-700"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[9px] font-mono font-bold text-teal-400 uppercase">
+                          Gemini API Key (Project Shared)
+                        </label>
+                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-[8px] font-mono text-teal-500/70 hover:text-teal-400 flex items-center gap-0.5 transition-colors" tabIndex={-1}>
+                          Get Key <ExternalLink className="h-2 w-2" />
+                        </a>
+                      </div>
+                      <input
+                        type="password"
+                        value={editGeminiKey}
+                        onChange={(e) => setEditGeminiKey(e.target.value)}
+                        placeholder="AI Studio API Key"
+                        className="w-full text-xs p-2.5 bg-[#251A13] border border-teal-900/50 rounded-lg focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-700"
                       />
                     </div>
                   </div>

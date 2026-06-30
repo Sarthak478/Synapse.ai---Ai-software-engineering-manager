@@ -145,6 +145,7 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
                 <input
                   type="password"
                   required
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"

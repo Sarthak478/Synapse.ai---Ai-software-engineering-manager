@@ -15,7 +15,7 @@ const router = Router();
  */
 function isValidGeminiKeyFormat(key: string): boolean {
   const trimmed = key.trim();
-  return trimmed.startsWith("AIza") && trimmed.length >= 35;
+  return (trimmed.startsWith("AIza") || trimmed.startsWith("AQ")) && trimmed.length >= 35;
 }
 
 // Middleware to dynamically check and bind the transient Gemini API Client
@@ -55,8 +55,8 @@ router.use((req: any, res, next) => {
 });
 
 // Helper to construct secure request-specific project context state dynamically
-const getContextState = (req: any) => {
-  const dbState = getState();
+const getContextState = async (req: any) => {
+  const dbState = await getState();
   const incomingState = req.body.state || {};
   return {
     developers: dbState.developers || incomingState.developers || [],
@@ -86,7 +86,7 @@ router.post("/analyze-repo", async (req: any, res) => {
   {
     "stack": ["Technology 1", "Technology 2"],
     "modules": [
-      { "name": "Module Name/Path", "type": "e.g. gateway, frontend, auth, backend, worker", "deps": ["Dep Module Name"] }
+      { "name": "Module Name/Path", "type": "e.g. gateway, frontend, auth, backend, worker", "description": "Short description of what this module does.", "deps": ["Dep Module Name"] }
     ],
     "apis": [
       { "path": "endpoint e.g. /api/users", "method": "GET/POST/PUT/DELETE", "description": "precise detail" }
@@ -117,10 +117,10 @@ router.post("/analyze-repo", async (req: any, res) => {
       const simulatedScan = {
         stack: ["React", "TypeScript", "Tailwind CSS", "Go", "GraphQL", "MongoDB"],
         modules: [
-          { name: "Apollo GraphQL Core", type: "gateway", deps: [] },
-          { name: "Frontend Visual Board", type: "frontend", deps: ["Apollo GraphQL Core"] },
-          { name: "Inventory Dispatcher", type: "business-logic", deps: ["Apollo GraphQL Core"] },
-          { name: "Billing Engine", type: "business-logic", deps: ["Apollo GraphQL Core"] }
+          { name: "Apollo GraphQL Core", type: "gateway", description: "Centralized GraphQL federated gateway handling incoming client schemas.", deps: [] },
+          { name: "Frontend Visual Board", type: "frontend", description: "React-based Single Page Application providing interactive visualizations.", deps: ["Apollo GraphQL Core"] },
+          { name: "Inventory Dispatcher", type: "business-logic", description: "Go-lang backend validating and dispatching real-time inventory queues.", deps: ["Apollo GraphQL Core"] },
+          { name: "Billing Engine", type: "business-logic", description: "Node.js engine processing credit transactions and user invoices.", deps: ["Apollo GraphQL Core"] }
         ],
         apis: [
           { path: "/query", method: "POST", description: "GraphQL main endpoint for visual widgets" },
@@ -147,7 +147,7 @@ router.post("/analyze-repo", async (req: any, res) => {
     }
 
     const response = await req.ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json"
@@ -165,7 +165,7 @@ router.post("/analyze-repo", async (req: any, res) => {
 // Gemini Sprint Planning Proxy
 router.post("/plan-sprint", async (req: any, res) => {
   const { requirements } = req.body;
-  const state = getContextState(req);
+  const state = await getContextState(req);
 
   if (!requirements) {
     return res.status(400).json({ error: "Sprint planning requirements are required." });
@@ -264,7 +264,7 @@ router.post("/plan-sprint", async (req: any, res) => {
     }
 
     const response = await req.ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
@@ -367,7 +367,7 @@ export async function fetchUserOrders(userId: string) {
     }
 
     const response = await req.ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
@@ -383,7 +383,7 @@ export async function fetchUserOrders(userId: string) {
 // Gemini PM Chat & Natural Language Queries Proxy
 router.post("/chat", async (req: any, res) => {
   const { message } = req.body;
-  const state = getContextState(req);
+  const state = await getContextState(req);
 
   if (!message) {
     return res.status(400).json({ error: "Message is required." });
@@ -467,7 +467,7 @@ How can I assist you further with task tracking, code review templates, or timel
     }
 
     const response = await req.ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: contextPrompt
     });
 
@@ -480,7 +480,7 @@ How can I assist you further with task tracking, code review templates, or timel
 
 // Gemini Team Morale & Burnout Safe-Guard Analysis Proxy
 router.post("/morale-check", async (req: any, res) => {
-  const state = getContextState(req);
+  const state = await getContextState(req);
 
   const prompt = `
   You are an expert Engineering Psychologist and Agile AI Scrum Master. Analyze the current state of our software development crew to assess morale, sentiment, and burnout risks.
@@ -573,7 +573,7 @@ router.post("/morale-check", async (req: any, res) => {
     }
 
     const response = await req.ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });

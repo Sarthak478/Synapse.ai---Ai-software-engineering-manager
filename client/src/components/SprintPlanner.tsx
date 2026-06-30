@@ -85,7 +85,8 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
         },
         body: JSON.stringify({
           domain: jiraDomain,
@@ -131,7 +132,8 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
         },
         body: JSON.stringify({
           domain: jiraDomain || state.jiraConfig?.domain,
@@ -214,7 +216,8 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
         },
         body: JSON.stringify({
           domain: jiraDomain || state.jiraConfig?.domain,
@@ -405,7 +408,8 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
         },
         body: JSON.stringify({ requirements: requirementsPrompt })
       });
@@ -610,7 +614,7 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
       <ApiKeyRequiredModal
         isOpen={showApiKeyModal}
         onClose={() => setShowApiKeyModal(false)}
-        onGoToSettings={() => goToTab("dashboard")}
+        onGoToSettings={() => goToTab?.("settings")}
         featureName="AI Sprint Planner"
       />
       

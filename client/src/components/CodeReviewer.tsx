@@ -127,7 +127,8 @@ export default function TimerWidget() {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
         },
         body: JSON.stringify({ fileName, codeSnippet })
       });
@@ -174,7 +175,7 @@ export default function TimerWidget() {
       <ApiKeyRequiredModal
         isOpen={showApiKeyModal}
         onClose={() => setShowApiKeyModal(false)}
-        onGoToSettings={() => goToTab?.("dashboard")}
+        onGoToSettings={() => goToTab?.("settings")}
         featureName="AI Code Reviewer"
       />
       
