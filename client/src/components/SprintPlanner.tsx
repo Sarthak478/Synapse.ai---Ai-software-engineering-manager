@@ -80,13 +80,12 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
     setJiraMessage(null);
 
     try {
-      const token = localStorage.getItem("synapse-session-token");
+      const token = localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token");
       const response = await fetch("/api/jira/fetch-issues", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           domain: jiraDomain,
@@ -127,13 +126,12 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
     setIsImporting(true);
     setJiraMessage(null);
     try {
-      const token = localStorage.getItem("synapse-session-token");
+      const token = localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token");
       const response = await fetch("/api/jira/fetch-issues", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           domain: jiraDomain || state.jiraConfig?.domain,
@@ -211,13 +209,12 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
   const handleExportTaskToJira = async (task: Task) => {
     setIsExportingTaskId(task.id);
     try {
-      const token = localStorage.getItem("synapse-session-token");
+      const token = localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token");
       const response = await fetch("/api/jira/create-issue", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           domain: jiraDomain || state.jiraConfig?.domain,
@@ -403,13 +400,12 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
     setIsPlanning(true);
 
     try {
-      const token = localStorage.getItem("synapse-session-token");
+      const token = localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token");
       const response = await fetch("/api/gemini/plan-sprint", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         },
         body: JSON.stringify({ requirements: requirementsPrompt })
       });

@@ -36,9 +36,8 @@ interface SidebarProps {
   onSetActiveDevId: (id: string | null) => void;
   onAddDeveloper: (dev: Developer) => Promise<void>;
   onRemoveDeveloper: (devId: string) => Promise<void>;
-  onUpdateDeveloper: (dev: Developer) => Promise<void>;
+  onUpdateProfileAndSettings: (dev: Developer, rawGeminiKey?: string) => Promise<void>;
   settings?: any;
-  onUpdateSettings?: (updatedSettings: any) => Promise<void>;
   showProfileModal: boolean;
   setShowProfileModal: (val: boolean) => void;
 }
@@ -54,9 +53,8 @@ export default function Sidebar({
   onSetActiveDevId,
   onAddDeveloper,
   onRemoveDeveloper,
-  onUpdateDeveloper,
+  onUpdateProfileAndSettings,
   settings,
-  onUpdateSettings,
   showProfileModal,
   setShowProfileModal
 }: SidebarProps) {
@@ -110,14 +108,14 @@ export default function Sidebar({
       setEditRole(activeDev.role);
       setEditEmail(activeDev.email || "");
       setEditSkills(activeDev.skills?.join(", ") || "");
-      setEditPassword(activeDev.password || "");
+      setEditPassword(""); // Don't pre-fill password for security
       setEditJiraDomain(activeDev.personalCredentials?.jiraDomain || "");
       setEditApiToken(activeDev.personalCredentials?.apiToken || "");
       setEditGithubToken(activeDev.personalCredentials?.githubToken || "");
       setEditCustomEndpoint(activeDev.personalCredentials?.customEndpoint || "");
     }
     if (settings) {
-      setEditGeminiKey(settings.geminiApiKey || "");
+      setEditGeminiKey(settings.hasGeminiApiKey ? "configured (masked for security)" : "");
     }
   }, [activeDev, settings, showProfileModal]);
 
@@ -201,10 +199,10 @@ export default function Sidebar({
       }
     };
 
-    await onUpdateDeveloper(updatedDevObj);
-    if (onUpdateSettings) {
-      await onUpdateSettings({ geminiApiKey: editGeminiKey.trim() });
-    }
+    const keyToSave = editGeminiKey !== "configured (masked for security)" ? editGeminiKey.trim() : undefined;
+    
+    await onUpdateProfileAndSettings(updatedDevObj, keyToSave);
+
     setShowProfileModal(false);
     showToast("✓ Personal Profile & Keys Saved!");
   };
@@ -537,10 +535,9 @@ export default function Sidebar({
                       </label>
                       <input
                         type="password"
-                        required
                         value={editPassword}
                         onChange={(e) => setEditPassword(e.target.value)}
-                        placeholder="••••••••••••"
+                        placeholder="Leave blank to keep current"
                         className="w-full text-xs p-2.5 bg-[#251A13] border border-[#3D2E24] rounded-lg focus:outline-none focus:border-teal-500 text-white font-mono"
                       />
                     </div>

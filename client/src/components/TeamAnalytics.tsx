@@ -108,13 +108,12 @@ export default function TeamAnalytics({ state, onSaveState, goToTab }: TeamAnaly
         await new Promise(r => setTimeout(r, 400));
       }
 
-      const token = localStorage.getItem("synapse-session-token");
+      const token = localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token");
       const res = await fetch("/api/gemini/morale-check", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         }
       });
 

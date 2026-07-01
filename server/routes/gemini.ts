@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { GoogleGenAI } from "@google/genai";
-import { getState } from "../db/stateManager.js";
+import { getState, decryptKey } from "../db/stateManager.js";
 
 const router = Router();
 
@@ -19,24 +19,30 @@ function isValidGeminiKeyFormat(key: string): boolean {
 }
 
 // Middleware to dynamically check and bind the transient Gemini API Client
-router.use((req: any, res, next) => {
-  const headerKey = req.headers["x-gemini-api-key"] as string | undefined;
+// SECURITY: The raw API key is read from the server's DB or env var.
+// It is NEVER accepted from a client-side header.
+router.use(async (req: any, res, next) => {
   const envKey = process.env.GEMINI_API_KEY;
 
-  // Prefer a valid client-supplied header key, then fall back to the environment key
   let resolvedKey: string | null = null;
 
-  if (headerKey && headerKey.trim() !== "" && headerKey !== "configured (masked for security)") {
-    if (isValidGeminiKeyFormat(headerKey)) {
-      resolvedKey = headerKey.trim();
-    } else {
-      // Invalid format — reject it silently and fall back to env key
-      console.warn("[Security] Rejected malformed x-gemini-api-key header from client.");
-    }
+  // 1. Try the environment variable first (highest trust)
+  if (envKey && isValidGeminiKeyFormat(envKey)) {
+    resolvedKey = envKey.trim();
   }
 
-  if (!resolvedKey && envKey && isValidGeminiKeyFormat(envKey)) {
-    resolvedKey = envKey.trim();
+  // 2. Fall back to the key stored server-side in DB
+  if (!resolvedKey) {
+    try {
+      const dbState = await getState();
+      const rawEncryptedKey = dbState.settings?.geminiApiKeyEncrypted || "";
+      const dbKey = decryptKey(rawEncryptedKey);
+      if (dbKey && isValidGeminiKeyFormat(dbKey)) {
+        resolvedKey = dbKey.trim();
+      }
+    } catch (e) {
+      console.error("[Gemini] Failed to read API key from DB:", e);
+    }
   }
 
   if (resolvedKey) {
@@ -76,17 +82,45 @@ router.post("/analyze-repo", async (req: any, res) => {
     return res.status(400).json({ error: "Repository URL and Description are required." });
   }
 
+  let githubInfo = "";
+  if (url.includes("github.com")) {
+    try {
+      const parts = url.split("github.com/")[1].split("/");
+      if (parts.length >= 2) {
+        const owner = parts[0];
+        const repo = parts[1].replace(".git", "");
+        
+        // Fetch languages
+        const langRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/languages`);
+        if (langRes.ok) {
+          const langs = await langRes.json();
+          githubInfo += `\n- GitHub Languages: ${Object.keys(langs).join(", ")}`;
+        }
+        
+        // Try fetching package.json
+        const pkgRes = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/package.json`);
+        if (pkgRes.ok) {
+          const pkg = await pkgRes.json();
+          const allDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+          githubInfo += `\n- package.json Dependencies: ${Object.keys(allDeps).join(", ")}`;
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to fetch github info", e);
+    }
+  }
+
   const prompt = `
   You are an AI Repository Architect. Based STRICTLY on the following repository info, perform a comprehensive software architecture and code analysis.
   Repository Name: "${name || 'Unknown Repo'}"
   Repository URL: "${url}"
   Description: "${description}"
+  ${githubInfo ? `\nReal GitHub Data Extracted:\n${githubInfo}\n` : ""}
 
   CRITICAL RULES:
-  - ONLY include technologies, databases, and frameworks that are explicitly mentioned in the description above or can be directly inferred from the repository URL/name.
-  - DO NOT hallucinate or guess technologies that are not mentioned. For example, if the description says "Redis" do NOT add "MongoDB". If it says "JavaScript" do NOT add "TypeScript" or "Go".
-  - If the description mentions "JS" or "JavaScript", list "JavaScript" NOT "TypeScript".
-  - Be conservative: only list what you are confident is actually used based on the provided information.
+  - Base your tech stack strictly on the Real GitHub Data Extracted (if provided), or infer from the description.
+  - If package.json dependencies are listed, correctly categorize them (e.g., 'express' -> Node.js Backend, 'react' -> React Frontend, 'mongoose' -> MongoDB).
+  - Do not hallucinate completely unrelated technologies, but do infer the architectural stack based on the provided dependencies and languages.
 
   Analyze and output a JSON schema with the exact format:
   {

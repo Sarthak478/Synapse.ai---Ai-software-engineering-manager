@@ -23,8 +23,23 @@ async function hashApiKey(key: string): Promise<string> {
 }
 
 // Helper to fetch/save project-specific states purely client-side for zero-knowledge compliance
-function loadLocalProjectData() {
-  const stored = localStorage.getItem("synapse-project-data");
+// DATA ISOLATION: Each user gets their own scoped localStorage key so no data leaks between accounts.
+function getProjectDataKey(devId: string) {
+  return `synapse-project-data-${devId}`;
+}
+
+function loadLocalProjectData(devId: string | null) {
+  if (!devId) return { ...defaultProjectData };
+
+  // Purge old global key on first scoped load to prevent data leakage
+  if (localStorage.getItem("synapse-project-data")) {
+    localStorage.removeItem("synapse-project-data");
+  }
+  if (localStorage.getItem("synapse-shared-gemini-key")) {
+    localStorage.removeItem("synapse-shared-gemini-key");
+  }
+
+  const stored = localStorage.getItem(getProjectDataKey(devId));
   if (stored) {
     try {
       return JSON.parse(stored);
@@ -32,11 +47,12 @@ function loadLocalProjectData() {
       console.error("Failed to parse stored project data:", e);
     }
   }
-  localStorage.setItem("synapse-project-data", JSON.stringify(defaultProjectData));
-  return defaultProjectData;
+  // First login for this user — start with a completely clean slate
+  return { ...defaultProjectData };
 }
 
-function saveLocalProjectData(state: any) {
+function saveLocalProjectData(devId: string | null, state: any) {
+  if (!devId) return;
   const toSave = {
     repositories: state.repositories || [],
     tasks: state.tasks || [],
@@ -45,7 +61,7 @@ function saveLocalProjectData(state: any) {
     chats: state.chats || [],
     sprints: state.sprints || []
   };
-  localStorage.setItem("synapse-project-data", JSON.stringify(toSave));
+  localStorage.setItem(getProjectDataKey(devId), JSON.stringify(toSave));
 }
 
 export default function App() {
@@ -57,11 +73,11 @@ export default function App() {
 
   // Active developer profile state - requiring secure authentication
   const [activeDevId, setActiveDevId] = useState<string | null>(() => {
-    return localStorage.getItem("synapse-active-dev-id") || null; // Require login first time
+    return localStorage.getItem("synapse-active-dev-id") || sessionStorage.getItem("synapse-active-dev-id") || null;
   });
 
   const [sessionToken, setSessionToken] = useState<string | null>(() => {
-    return localStorage.getItem("synapse-session-token") || null;
+    return localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token") || null;
   });
 
   const [publicDevs, setPublicDevs] = useState<any[]>([]);
@@ -70,25 +86,31 @@ export default function App() {
     setActiveDevId(null);
     setSessionToken(null);
     localStorage.removeItem("synapse-active-dev-id");
+    sessionStorage.removeItem("synapse-active-dev-id");
     localStorage.removeItem("synapse-session-token");
+    sessionStorage.removeItem("synapse-session-token");
     setState(null);
   };
 
-  const handleSetActiveDevId = (id: string | null) => {
+  const handleSetActiveDevId = (id: string | null, rememberMe: boolean = false) => {
     setActiveDevId(id);
     if (id) {
-      localStorage.setItem("synapse-active-dev-id", id);
-    } else {
-      handleLogout();
+      if (rememberMe) {
+        localStorage.setItem("synapse-active-dev-id", id);
+      } else {
+        sessionStorage.setItem("synapse-active-dev-id", id);
+      }
     }
   };
 
-  const handleSetSessionToken = (token: string | null) => {
+  const handleSetSessionToken = (token: string | null, rememberMe: boolean = false) => {
     setSessionToken(token);
     if (token) {
-      localStorage.setItem("synapse-session-token", token);
-    } else {
-      localStorage.removeItem("synapse-session-token");
+      if (rememberMe) {
+        localStorage.setItem("synapse-session-token", token);
+      } else {
+        sessionStorage.setItem("synapse-session-token", token);
+      }
     }
   };
 
@@ -102,42 +124,41 @@ export default function App() {
     // Head registers teammate - keep activeDevId as the Head! No automatic session switching.
   };
 
-  const handleUpdateDeveloper = async (updatedDev: any) => {
+  const handleUpdateProfileAndSettings = async (updatedDev: any, rawGeminiKey?: string) => {
     if (!state) return;
+    
+    // Process Developer
     const updatedDevs = state.developers.map(d => d.id === updatedDev.id ? updatedDev : d);
-    await handleSaveState({
-      ...state,
-      developers: updatedDevs
-    });
-  };
+    let newState = { ...state, developers: updatedDevs };
 
-  const handleUpdateSettings = async (updatedSettings: { geminiApiKey: string }) => {
-    if (!state) return;
-    const rawKey = updatedSettings.geminiApiKey;
-    if (rawKey && rawKey !== "configured (masked for security)") {
-      localStorage.setItem("synapse-shared-gemini-key", rawKey);
-      const hash = await hashApiKey(rawKey);
-      await handleSaveState({
-        ...state,
-        settings: {
-          ...state.settings,
-          hasGeminiApiKey: true,
-          geminiApiKeyHash: hash,
-          geminiApiKey: rawKey
-        } as any
-      });
-    } else if (rawKey === "") {
-      localStorage.removeItem("synapse-shared-gemini-key");
-      await handleSaveState({
-        ...state,
-        settings: {
-          ...state.settings,
-          hasGeminiApiKey: false,
-          geminiApiKeyHash: "",
-          geminiApiKey: ""
-        } as any
-      });
+    // Process Gemini Key if provided
+    let rawKeyToSend = undefined;
+    if (rawGeminiKey !== undefined) {
+      if (rawGeminiKey && rawGeminiKey !== "configured (masked for security)") {
+        const hash = await hashApiKey(rawGeminiKey);
+        newState = {
+          ...newState,
+          settings: {
+            ...newState.settings,
+            hasGeminiApiKey: true,
+            geminiApiKeyHash: hash
+          } as any
+        };
+        rawKeyToSend = rawGeminiKey;
+      } else if (rawGeminiKey === "") {
+        newState = {
+          ...newState,
+          settings: {
+            ...newState.settings,
+            hasGeminiApiKey: false,
+            geminiApiKeyHash: ""
+          } as any
+        };
+        rawKeyToSend = "";
+      }
     }
+
+    await handleSaveState(newState, rawKeyToSend);
   };
 
   const handleRemoveDeveloperFromApp = async (devId: string) => {
@@ -190,14 +211,15 @@ export default function App() {
       if (!response.ok) throw new Error("Could not contact persistent state server");
       const data = await response.json();
 
-      // Load local project state and merge with server state
-      const localProject = loadLocalProjectData();
+      // Load local project state and merge with server state (scoped to this user)
+      const currentDevId = activeDevId;
+      const localProject = loadLocalProjectData(currentDevId);
       const merged = {
         ...data,
         ...localProject,
         settings: {
-          hasGeminiApiKey: data.settings?.hasGeminiApiKey || !!localStorage.getItem("synapse-shared-gemini-key"),
-          geminiApiKey: localStorage.getItem("synapse-shared-gemini-key") || ""
+          ...data.settings,
+          hasGeminiApiKey: data.settings?.hasGeminiApiKey
         }
       };
       setState(merged);
@@ -231,9 +253,9 @@ export default function App() {
   }, [sessionToken]);
 
   // Synchronize state changes to server JSON DB securely
-  const handleSaveState = async (updatedState: AppState) => {
-    // 1. Save project-specific fields strictly to local storage (zero-knowledge)
-    saveLocalProjectData(updatedState);
+  const handleSaveState = async (updatedState: AppState, rawGeminiKeyToSend?: string) => {
+    // 1. Save project-specific fields strictly to local storage (zero-knowledge, user-scoped)
+    saveLocalProjectData(activeDevId, updatedState);
 
     // 2. Perform instant optimistic local state update for responsiveness
     setState(updatedState);
@@ -241,13 +263,17 @@ export default function App() {
     if (!sessionToken) return;
     setIsSyncing(true);
     try {
-      // Prepare sanitized body to send to server (only developers roster and key hash status)
-      const payload = {
+      // Prepare sanitized body to send to server
+      const payload: any = {
         developers: updatedState.developers,
         settings: {
           geminiApiKeyHash: updatedState.settings?.geminiApiKeyHash || ""
         }
       };
+
+      if (rawGeminiKeyToSend !== undefined) {
+        payload.settings.geminiApiKeyEncrypted = rawGeminiKeyToSend;
+      }
 
       const response = await fetch("/api/state/save", {
         method: "POST",
@@ -264,13 +290,13 @@ export default function App() {
       if (!response.ok) throw new Error("Could not sync state to server");
       const data = await response.json();
       if (data.state) {
-        const localProject = loadLocalProjectData();
+        const localProject = loadLocalProjectData(activeDevId);
         const merged = {
           ...data.state,
           ...localProject,
           settings: {
-            hasGeminiApiKey: data.state.settings?.hasGeminiApiKey || !!localStorage.getItem("synapse-shared-gemini-key"),
-            geminiApiKey: localStorage.getItem("synapse-shared-gemini-key") || ""
+            ...data.state.settings,
+            hasGeminiApiKey: data.state.settings?.hasGeminiApiKey
           }
         };
         setState(merged);
@@ -288,9 +314,10 @@ export default function App() {
     if (!sessionToken) return;
     setIsSyncing(true);
     try {
-      // 1. Reset client-side project data to default mock
-      localStorage.setItem("synapse-project-data", JSON.stringify(defaultProjectData));
-      localStorage.removeItem("synapse-shared-gemini-key");
+      // 1. Reset client-side project data for this user
+      if (activeDevId) {
+        localStorage.removeItem(getProjectDataKey(activeDevId));
+      }
 
       const response = await fetch("/api/state/reset", { 
         method: "POST",
@@ -309,8 +336,7 @@ export default function App() {
         ...data.state,
         ...defaultProjectData,
         settings: {
-          hasGeminiApiKey: false,
-          geminiApiKey: ""
+          hasGeminiApiKey: false
         }
       };
       setState(merged);
@@ -336,9 +362,9 @@ export default function App() {
     return (
       <LoginScreen
         developers={publicDevs}
-        onLoginSuccess={(token, devId) => {
-          handleSetSessionToken(token);
-          handleSetActiveDevId(devId);
+        onLoginSuccess={(token, devId, rememberMe) => {
+          handleSetSessionToken(token, rememberMe);
+          handleSetActiveDevId(devId, rememberMe);
         }}
       />
     );
@@ -370,9 +396,65 @@ export default function App() {
   const totalTasksCount = sprintTasks.length;
   const completionScore = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
 
+  const unreadNotifications = state.settings?.notifications?.filter((n: any) => !n.readBy.includes(activeDevId)) || [];
+  const activePasscodes = state.settings?.recoveryPasscodes?.filter((rp: any) => rp.expiresAt > Date.now()) || [];
+
+  const handleDismissNotification = async (notifId: string) => {
+    const updatedNotifs = state.settings?.notifications?.map((n: any) => {
+      if (n.id === notifId) return { ...n, readBy: [...n.readBy, activeDevId] };
+      return n;
+    }) || [];
+    await handleSaveState({ ...state, settings: { ...state.settings, notifications: updatedNotifs } as any });
+  };
+
+  const handleDismissPasscode = async (passcodeVal: string) => {
+    const updatedPasscodes = state.settings?.recoveryPasscodes?.filter((rp: any) => rp.passcode !== passcodeVal) || [];
+    await handleSaveState({ ...state, settings: { ...state.settings, recoveryPasscodes: updatedPasscodes } as any });
+  };
+
   return (
     <div className={`flex bg-beige-50 min-h-screen text-coffee-800 antialiased font-sans transition-colors duration-200 ${isDarkMode ? "dark bg-[#150E0A] text-[#ECE4DE]" : ""}`}>
       
+      {/* GLOBAL OVERLAYS */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+        {unreadNotifications.map((n: any) => (
+          <div key={n.id} className="bg-white dark:bg-[#1C1410] border border-teal-500/30 p-3 rounded-lg shadow-lg max-w-sm pointer-events-auto flex items-start gap-3 animate-in slide-in-from-right-8">
+            <Info className="h-5 w-5 text-teal-500 shrink-0" />
+            <div className="flex-1">
+              <h4 className="text-xs font-bold text-coffee-800 dark:text-white mb-1">New Member Announcement</h4>
+              <p className="text-[10px] text-slate-600 dark:text-slate-400">{n.message}</p>
+            </div>
+            <button onClick={() => handleDismissNotification(n.id)} className="text-[10px] text-teal-600 hover:underline">Dismiss</button>
+          </div>
+        ))}
+        {loggedInDev.isHead && activePasscodes.map((rp: any) => (
+          <div key={rp.passcode} className="bg-amber-50 dark:bg-amber-950/30 border border-amber-500/50 p-3 rounded-lg shadow-lg max-w-sm pointer-events-auto flex items-start gap-3 animate-in slide-in-from-right-8">
+            <Info className="h-5 w-5 text-amber-600 shrink-0" />
+            <div className="flex-1">
+              <h4 className="text-xs font-bold text-amber-800 dark:text-amber-400 mb-1">Passcode Request</h4>
+              <p className="text-[10px] text-amber-700 dark:text-amber-200 mb-1">
+                A password reset was requested for user: <strong>{rp.userId}</strong>
+              </p>
+              <p className="text-xs font-mono font-bold bg-amber-200 dark:bg-amber-900 px-2 py-1 rounded inline-block">
+                {rp.passcode}
+              </p>
+            </div>
+            <button onClick={() => handleDismissPasscode(rp.passcode)} className="px-2 py-1 bg-amber-600 text-white rounded text-[10px] font-bold hover:bg-amber-700">Done</button>
+          </div>
+        ))}
+        {loggedInDev.passwordChangedAt === null && (
+          <div className="bg-teal-50 dark:bg-teal-950/30 border border-teal-500/50 p-3 rounded-lg shadow-lg max-w-sm pointer-events-auto flex items-start gap-3 animate-in slide-in-from-right-8">
+            <Info className="h-5 w-5 text-teal-600 shrink-0" />
+            <div className="flex-1">
+              <h4 className="text-xs font-bold text-teal-800 dark:text-teal-400 mb-1">Security Reminder</h4>
+              <p className="text-[10px] text-teal-700 dark:text-teal-200">
+                You are using the default password. Please update your password in Settings.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Structural Sidebar Drawer */}
       <Sidebar
         currentTab={currentTab}
@@ -385,9 +467,8 @@ export default function App() {
         onSetActiveDevId={handleSetActiveDevId}
         onAddDeveloper={handleAddDeveloperFromApp}
         onRemoveDeveloper={handleRemoveDeveloperFromApp}
-        onUpdateDeveloper={handleUpdateDeveloper}
+        onUpdateProfileAndSettings={handleUpdateProfileAndSettings}
         settings={state.settings}
-        onUpdateSettings={handleUpdateSettings}
         showProfileModal={showProfileModal}
         setShowProfileModal={setShowProfileModal}
       />

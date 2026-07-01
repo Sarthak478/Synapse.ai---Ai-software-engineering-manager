@@ -1,8 +1,43 @@
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { Developer, Settings } from "./models.js";
 import { connectDB } from "./connection.js";
 
 const BCRYPT_SALT_ROUNDS = 10;
+const ALGORITHM = "aes-256-gcm";
+const SECRET_KEY = crypto.createHash('sha256').update(String(process.env.MONGODB_URI || "fallback-dev-secret-key")).digest('base64').substring(0, 32);
+
+export function encryptKey(text: string): string {
+  if (!text) return "";
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(SECRET_KEY), iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag().toString('hex');
+  return `${iv.toString('hex')}:${authTag}:${encrypted}`;
+}
+
+export function decryptKey(encryptedData: string): string {
+  if (!encryptedData) return "";
+  try {
+    const parts = encryptedData.split(":");
+    if (parts.length !== 3) return encryptedData; // Unencrypted fallback for legacy data
+    
+    const iv = Buffer.from(parts[0], 'hex');
+    const authTag = Buffer.from(parts[1], 'hex');
+    const encryptedText = parts[2];
+    
+    const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(SECRET_KEY), iv);
+    decipher.setAuthTag(authTag);
+    
+    let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (err) {
+    console.error("Decryption failed", err);
+    return "";
+  }
+}
 
 /** Returns true if the string is already a bcrypt hash */
 function isBcryptHash(val: string): boolean {
@@ -23,7 +58,7 @@ export function verifyPassword(plain: string, hash: string): boolean {
 const DEV_DISK_FIELDS = [
   "id", "name", "avatar", "email", "role", "skills",
   "workloadPoints", "velocity", "activeTaskId", "isHead",
-  "userId", "password", "personalCredentials", "contributions"
+  "userId", "password", "passwordChangedAt", "addedBy", "personalCredentials", "contributions"
 ] as const;
 
 /** Strips any unknown fields from a developer object before writing to DB */
@@ -40,7 +75,9 @@ function sanitizeDevForDisk(d: any): any {
 export const defaultState = {
   developers: [] as any[],
   settings: {
-    geminiApiKeyHash: ""
+    geminiApiKeyHash: "",
+    notifications: [],
+    recoveryPasscodes: []
   }
 };
 
@@ -61,7 +98,12 @@ export async function getState() {
     if (devs.length === 0) {
       return {
         developers: [],
-        settings: { geminiApiKeyHash: settingsDoc.geminiApiKeyHash }
+        settings: { 
+          geminiApiKeyHash: settingsDoc.geminiApiKeyHash,
+          geminiApiKeyEncrypted: settingsDoc.geminiApiKeyEncrypted || "",
+          notifications: settingsDoc.notifications || [],
+          recoveryPasscodes: settingsDoc.recoveryPasscodes || []
+        }
       };
     }
     
@@ -99,7 +141,12 @@ export async function getState() {
 
     return {
       developers: parsedDevs,
-      settings: { geminiApiKeyHash: settingsDoc.geminiApiKeyHash }
+      settings: { 
+        geminiApiKeyHash: settingsDoc.geminiApiKeyHash,
+        geminiApiKeyEncrypted: settingsDoc.geminiApiKeyEncrypted || "",
+        notifications: settingsDoc.notifications || [],
+        recoveryPasscodes: settingsDoc.recoveryPasscodes || []
+      }
     };
     
   } catch (error) {
@@ -133,7 +180,12 @@ export async function saveState(state: any) {
     if (state.settings) {
       await Settings.updateOne(
         { id: "global-settings" },
-        { $set: { geminiApiKeyHash: state.settings.geminiApiKeyHash || "" } },
+        { $set: { 
+          geminiApiKeyHash: state.settings.geminiApiKeyHash || "",
+          geminiApiKeyEncrypted: state.settings.geminiApiKeyEncrypted || "",
+          notifications: state.settings.notifications || [],
+          recoveryPasscodes: state.settings.recoveryPasscodes || []
+        } },
         { upsert: true }
       );
     }

@@ -143,9 +143,7 @@ export interface AppState {
   chats: ChatMessage[];
   sprints: Sprint[];
   settings?: {
-    geminiApiKey: string;
     hasGeminiApiKey?: boolean;
-    geminiApiKeyHash?: string;
   };
   jiraConfig?: {
     domain: string;

@@ -42,14 +42,19 @@ export default function DashboardOverview({ state, goToTab }: DashboardOverviewP
   const percentComplete = totalPoints > 0 ? Math.round((donePoints / totalPoints) * 100) : 0;
 
   // Let's compute weighted scoring indexes:
-  // Code quality score from active reviews or defaulted to standard metrics
+  // Code quality score from active reviews — no data means 0, not a fake number
   const defaultQuality = state.codeReviews.length > 0 
     ? Math.round(state.codeReviews.reduce((acc, cr) => acc + cr.qualityScore, 0) / state.codeReviews.length)
-    : 84;
+    : 0;
 
-  const securityScore = tasks.some(t => t.priority === "critical" && t.status !== "done") ? 78 : 94;
-  const performanceScore = tasks.some(t => t.skillsRequired.includes("Redis") && t.status !== "done") ? 81 : 92;
-  const healthScore = Math.round((securityScore + performanceScore + defaultQuality + percentComplete) / 4);
+  const securityScore = tasks.length > 0 ? (tasks.some(t => t.priority === "critical" && t.status !== "done") ? 78 : 94) : 0;
+  const performanceScore = tasks.length > 0 ? (tasks.some(t => t.skillsRequired.includes("Redis") && t.status !== "done") ? 81 : 92) : 0;
+  const healthScore = (securityScore + performanceScore + defaultQuality + percentComplete) > 0 
+    ? Math.round((securityScore + performanceScore + defaultQuality + percentComplete) / 4) 
+    : 0;
+
+  const repos = state.repositories || [];
+  const isEmptyWorkspace = repos.length === 0 && tasks.length === 0;
 
   // Critical alerts & bottleneck computations
   const blockedTasks = tasks.filter(t => t.blockedBy && t.blockedBy.length > 0 && t.status !== "done");
@@ -57,6 +62,34 @@ export default function DashboardOverview({ state, goToTab }: DashboardOverviewP
 
   return (
     <div className="flex flex-col gap-6">
+
+      {/* EMPTY WORKSPACE: Getting Started Prompt */}
+      {isEmptyWorkspace && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="bg-gradient-to-br from-teal-950/40 to-[#130E0B] border border-teal-800/40 rounded-2xl p-8 flex flex-col items-center text-center gap-4 shadow-lg"
+        >
+          <div className="w-16 h-16 bg-teal-600/20 rounded-2xl flex items-center justify-center border border-teal-500/30">
+            <ArrowUpRight className="h-8 w-8 text-teal-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Welcome to Your New Workspace</h3>
+            <p className="text-sm text-slate-400 mt-1 max-w-md">
+              Your workspace is freshly initialized with zero data. Start by connecting your GitHub repository so Synapse can begin analyzing your codebase.
+            </p>
+          </div>
+          <button
+            onClick={() => goToTab("repos")}
+            className="mt-2 px-6 py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-md shadow-teal-950/50 active:scale-[0.98]"
+          >
+            <ArrowUpRight className="h-4 w-4" />
+            Go to Repo Intelligence
+          </button>
+        </motion.div>
+      )}
+
       {/* Welcome & Sprints Summary */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200/50 shadow-xs">
         <div>
@@ -85,7 +118,11 @@ export default function DashboardOverview({ state, goToTab }: DashboardOverviewP
           </div>
           <div className="mt-4 flex items-baseline gap-2">
             <span className="text-3xl font-bold text-slate-900">{healthScore}%</span>
-            <span className="text-[10px] text-emerald-600 font-mono font-bold uppercase bg-emerald-50 px-1 py-0.5 rounded">Optimal</span>
+            {healthScore > 0 ? (
+              <span className="text-[10px] text-emerald-600 font-mono font-bold uppercase bg-emerald-50 px-1 py-0.5 rounded">Optimal</span>
+            ) : (
+              <span className="text-[10px] text-slate-400 font-mono font-bold uppercase bg-slate-50 px-1 py-0.5 rounded">No Data</span>
+            )}
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden">
             <div className="bg-emerald-500 h-full rounded-full transition-all duration-300" style={{ width: `${healthScore}%` }}></div>

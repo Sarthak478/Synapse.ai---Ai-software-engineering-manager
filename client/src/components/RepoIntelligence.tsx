@@ -105,13 +105,12 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
     }
     setIsScanning(true);
     try {
-      const token = localStorage.getItem("synapse-session-token");
+      const token = localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token");
       const response = await fetch("/api/gemini/analyze-repo", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           name: newRepoName,
@@ -169,13 +168,12 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
     }
     setIsScanning(true);
     try {
-      const token = localStorage.getItem("synapse-session-token");
+      const token = localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token");
       const response = await fetch("/api/gemini/analyze-repo", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-          ...(state.settings?.geminiApiKey ? { "x-gemini-api-key": state.settings.geminiApiKey } : {})
+          ...(token ? { "Authorization": `Bearer ${token}` } : {})
         },
         body: JSON.stringify({
           name: repo.name,

@@ -16,6 +16,8 @@ const developerSchema = new mongoose.Schema({
   isHead: { type: Boolean, default: false },
   userId: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  passwordChangedAt: { type: Date, default: null },
+  addedBy: { type: String },
   personalCredentials: { type: Object, default: {} },
   contributions: {
     commits: { type: Number, default: 0 },
@@ -32,7 +34,10 @@ export const Developer = mongoose.model("Developer", developerSchema);
 
 const settingsSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true, default: "global-settings" },
-  geminiApiKeyHash: { type: String, default: "" }
+  geminiApiKeyHash: { type: String, default: "" },
+  geminiApiKeyEncrypted: { type: String, default: "" },
+  notifications: { type: Array, default: [] },
+  recoveryPasscodes: { type: Array, default: [] }
 });
 
 export const Settings = mongoose.model("Settings", settingsSchema);

@@ -18,8 +18,25 @@ router.post("/login", async (req, res) => {
     (dev: any) => dev.userId?.toLowerCase() === cleanUser
   );
 
-  // SECURITY FIX #1: Compare with bcrypt instead of plain-text equality
-  if (!matchedDev || !verifyPassword(password, matchedDev.password)) {
+  // Check if they are logging in with a recovery passcode
+  let isValidLogin = false;
+  
+  if (matchedDev) {
+    const isPasscode = dbState.settings?.recoveryPasscodes?.find(
+      (rp: any) => rp.userId === matchedDev.userId && rp.passcode === password && rp.expiresAt > Date.now()
+    );
+
+    if (isPasscode) {
+      isValidLogin = true;
+      // Invalidate the passcode
+      dbState.settings.recoveryPasscodes = dbState.settings.recoveryPasscodes.filter((rp: any) => rp.passcode !== password);
+      await saveState(dbState);
+    } else if (verifyPassword(password, matchedDev.password)) {
+      isValidLogin = true;
+    }
+  }
+
+  if (!isValidLogin) {
     return res.status(401).json({ error: "Invalid User ID or Password." });
   }
 
@@ -64,6 +81,8 @@ router.post("/register", async (req, res) => {
     isHead: true,
     userId: cleanUserId,
     password: hashedPassword,
+    passwordChangedAt: null,
+    addedBy: "system",
     personalCredentials: {},
     contributions: { commits: 0, PRs: 0, reviews: 0 }
   };
@@ -97,6 +116,38 @@ router.get("/developers", async (req, res) => {
     isHead: d.isHead
   }));
   res.json(publicDevs);
+});
+
+// Forgot Password Flow - Generate Passcode
+router.post("/forgot-password", async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: "User ID is required." });
+
+  const dbState = await getState();
+  const cleanUser = userId.trim().toLowerCase();
+  const matchedDev = dbState.developers.find(
+    (dev: any) => dev.userId?.toLowerCase() === cleanUser
+  );
+
+  if (!matchedDev) {
+    // Return generic success to avoid user enumeration
+    return res.json({ success: true, message: "If the user exists, a passcode has been generated for the Team Head." });
+  }
+
+  const passcode = Math.floor(100000 + Math.random() * 900000).toString();
+  const newPasscodeEntry = {
+    userId: matchedDev.userId,
+    passcode,
+    expiresAt: Date.now() + 15 * 60 * 1000 // 15 mins
+  };
+
+  if (!dbState.settings.recoveryPasscodes) {
+    dbState.settings.recoveryPasscodes = [];
+  }
+  dbState.settings.recoveryPasscodes.push(newPasscodeEntry);
+  await saveState(dbState);
+
+  res.json({ success: true, message: "If the user exists, a passcode has been generated for the Team Head." });
 });
 
 export default router;

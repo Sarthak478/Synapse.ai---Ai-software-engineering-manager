@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getState, saveState, defaultState, hashPasswordSync } from "../db/stateManager.js";
+import { getState, saveState, defaultState, hashPasswordSync, encryptKey } from "../db/stateManager.js";
 
 const router = Router();
 
@@ -7,7 +7,7 @@ const router = Router();
 const CLIENT_SAFE_DEV_FIELDS = [
   "id", "name", "avatar", "email", "role", "skills",
   "workloadPoints", "velocity", "activeTaskId", "isHead",
-  "userId", "contributions"
+  "userId", "contributions", "addedBy", "passwordChangedAt"
 ] as const;
 
 function buildSafeDevRecord(d: any): any {
@@ -22,7 +22,9 @@ function buildSafeState(dbState: any) {
   const sanitized: any = { ...dbState };
   sanitized.developers = dbState.developers.map(buildSafeDevRecord);
   sanitized.settings = {
-    hasGeminiApiKey: !!dbState.settings?.geminiApiKeyHash
+    hasGeminiApiKey: !!dbState.settings?.geminiApiKeyHash,
+    notifications: dbState.settings?.notifications || [],
+    recoveryPasscodes: dbState.settings?.recoveryPasscodes || []
   };
   return sanitized;
 }
@@ -43,7 +45,7 @@ router.post("/save", async (req: any, res: any) => {
 
   const dbState = await getState();
 
-  // 0. Update settings (only Head can configure Gemini Key Hash)
+  // 0. Update settings (only Head can configure Gemini Key)
   if (incomingState.settings) {
     const isHead = dbState.developers.find((d: any) => d.id === currentDevId)?.isHead === true;
     if (incomingState.settings.geminiApiKeyHash !== undefined) {
@@ -51,6 +53,11 @@ router.post("/save", async (req: any, res: any) => {
         return res.status(403).json({ error: "Access Denied: Only a Project Head can configure the team's Gemini API Key." });
       }
       dbState.settings.geminiApiKeyHash = incomingState.settings.geminiApiKeyHash.trim();
+      // Store the raw key server-side so the Gemini route can use it directly
+      // The client sends it once during save, then forgets it
+      if (incomingState.settings.geminiApiKeyEncrypted !== undefined) {
+        dbState.settings.geminiApiKeyEncrypted = encryptKey(incomingState.settings.geminiApiKeyEncrypted.trim());
+      }
     }
   }
 
@@ -115,6 +122,7 @@ router.post("/save", async (req: any, res: any) => {
       if (originalDev.id === currentDevId) {
         if (typeof incomingDev.password === "string" && incomingDev.password.trim() !== "") {
           mergedDev.password = hashPasswordSync(incomingDev.password.trim());
+          mergedDev.passwordChangedAt = new Date();
         }
       } else {
         mergedDev.password = originalDev.password;
@@ -157,8 +165,25 @@ router.post("/save", async (req: any, res: any) => {
           isHead: !!incomingDev.isHead,
           userId: cleanUserId,
           password: hashPasswordSync(rawPassword),
+          passwordChangedAt: null,
+          addedBy: currentDevId,
           personalCredentials: {},
           contributions: incomingDev.contributions || { commits: 0, PRs: 0, reviews: 0 }
+        });
+
+        // Add announcement notification
+        if (!dbState.settings.notifications) {
+          dbState.settings.notifications = [];
+        }
+        
+        const headDev = dbState.developers.find((d: any) => d.id === currentDevId);
+        const headName = headDev ? headDev.name : "Team Head";
+        
+        dbState.settings.notifications.push({
+          id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          message: `${incomingDev.name} joined for ${incomingDev.role} role by ${headName}`,
+          createdAt: new Date(),
+          readBy: []
         });
       }
     }
@@ -185,7 +210,11 @@ router.post("/reset", async (req: any, res: any) => {
   // Reset clears project settings but preserves developer accounts
   const resetState = {
     developers: dbState.developers, // Keep existing accounts
-    settings: { geminiApiKeyHash: "" }
+    settings: { 
+      geminiApiKeyHash: "",
+      notifications: [],
+      recoveryPasscodes: []
+    }
   };
   await saveState(resetState);
 
