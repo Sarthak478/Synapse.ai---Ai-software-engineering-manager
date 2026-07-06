@@ -6,6 +6,7 @@ import cors from "cors";
 // Import Custom Middlewares
 import { securityMiddleware, errorBoundary } from "./middlewares/security.js";
 import { authenticateToken } from "./middlewares/auth.js";
+import { connectDB } from "./db/connection.js";
 
 // Import Modular Routers
 import authRouter from "./routes/auth.js";
@@ -46,6 +47,7 @@ app.use(errorBoundary);
 
 // 5. Start Backend Server
 async function startServer() {
+  await connectDB();
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`====================================================`);
     console.log(` SYNAPSE ENTERPRISE GATEWAY BOOTED SUCCESSFULLY     `);

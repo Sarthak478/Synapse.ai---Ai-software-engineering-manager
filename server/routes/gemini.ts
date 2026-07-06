@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { GoogleGenAI } from "@google/genai";
 import { getState, decryptKey } from "../db/stateManager.js";
+import { Developer } from "../db/models.js";
 
 const router = Router();
 
@@ -34,11 +35,14 @@ router.use(async (req: any, res, next) => {
   // 2. Fall back to the key stored server-side in DB
   if (!resolvedKey) {
     try {
-      const dbState = await getState();
-      const rawEncryptedKey = dbState.settings?.geminiApiKeyEncrypted || "";
-      const dbKey = decryptKey(rawEncryptedKey);
-      if (dbKey && isValidGeminiKeyFormat(dbKey)) {
-        resolvedKey = dbKey.trim();
+      const dev = await Developer.findOne({ id: req.userDevId }).lean();
+      if (dev) {
+        const dbState = await getState(dev.workspaceId);
+        const rawEncryptedKey = dbState.settings?.geminiApiKeyEncrypted || "";
+        const dbKey = decryptKey(rawEncryptedKey);
+        if (dbKey && isValidGeminiKeyFormat(dbKey)) {
+          resolvedKey = dbKey.trim();
+        }
       }
     } catch (e) {
       console.error("[Gemini] Failed to read API key from DB:", e);

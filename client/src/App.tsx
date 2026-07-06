@@ -23,13 +23,14 @@ async function hashApiKey(key: string): Promise<string> {
 }
 
 // Helper to fetch/save project-specific states purely client-side for zero-knowledge compliance
-// DATA ISOLATION: Each user gets their own scoped localStorage key so no data leaks between accounts.
-function getProjectDataKey(devId: string) {
-  return `synapse-project-data-${devId}`;
+// DATA ISOLATION: Each user gets their own scoped localStorage key partitioned by workspaceId and devId.
+function getProjectDataKey(workspaceId: string | null, devId: string | null) {
+  if (!workspaceId || !devId) return "";
+  return `synapse-project-data-${workspaceId}-${devId}`;
 }
 
-function loadLocalProjectData(devId: string | null) {
-  if (!devId) return { ...defaultProjectData };
+function loadLocalProjectData(workspaceId: string | null, devId: string | null) {
+  if (!workspaceId || !devId) return { ...defaultProjectData };
 
   // Purge old global key on first scoped load to prevent data leakage
   if (localStorage.getItem("synapse-project-data")) {
@@ -39,7 +40,7 @@ function loadLocalProjectData(devId: string | null) {
     localStorage.removeItem("synapse-shared-gemini-key");
   }
 
-  const stored = localStorage.getItem(getProjectDataKey(devId));
+  const stored = localStorage.getItem(getProjectDataKey(workspaceId, devId));
   if (stored) {
     try {
       return JSON.parse(stored);
@@ -51,8 +52,8 @@ function loadLocalProjectData(devId: string | null) {
   return { ...defaultProjectData };
 }
 
-function saveLocalProjectData(devId: string | null, state: any) {
-  if (!devId) return;
+function saveLocalProjectData(workspaceId: string | null, devId: string | null, state: any) {
+  if (!workspaceId || !devId) return;
   const toSave = {
     repositories: state.repositories || [],
     tasks: state.tasks || [],
@@ -61,7 +62,7 @@ function saveLocalProjectData(devId: string | null, state: any) {
     chats: state.chats || [],
     sprints: state.sprints || []
   };
-  localStorage.setItem(getProjectDataKey(devId), JSON.stringify(toSave));
+  localStorage.setItem(getProjectDataKey(workspaceId, devId), JSON.stringify(toSave));
 }
 
 export default function App() {
@@ -76,6 +77,10 @@ export default function App() {
     return localStorage.getItem("synapse-active-dev-id") || sessionStorage.getItem("synapse-active-dev-id") || null;
   });
 
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() => {
+    return localStorage.getItem("synapse-active-workspace-id") || sessionStorage.getItem("synapse-active-workspace-id") || null;
+  });
+
   const [sessionToken, setSessionToken] = useState<string | null>(() => {
     return localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token") || null;
   });
@@ -85,10 +90,13 @@ export default function App() {
   const handleLogout = () => {
     setActiveDevId(null);
     setSessionToken(null);
+    setActiveWorkspaceId(null);
     localStorage.removeItem("synapse-active-dev-id");
     sessionStorage.removeItem("synapse-active-dev-id");
     localStorage.removeItem("synapse-session-token");
     sessionStorage.removeItem("synapse-session-token");
+    localStorage.removeItem("synapse-active-workspace-id");
+    sessionStorage.removeItem("synapse-active-workspace-id");
     setState(null);
   };
 
@@ -99,6 +107,17 @@ export default function App() {
         localStorage.setItem("synapse-active-dev-id", id);
       } else {
         sessionStorage.setItem("synapse-active-dev-id", id);
+      }
+    }
+  };
+
+  const handleSetActiveWorkspaceId = (workspaceId: string | null, rememberMe: boolean = false) => {
+    setActiveWorkspaceId(workspaceId);
+    if (workspaceId) {
+      if (rememberMe) {
+        localStorage.setItem("synapse-active-workspace-id", workspaceId);
+      } else {
+        sessionStorage.setItem("synapse-active-workspace-id", workspaceId);
       }
     }
   };
@@ -211,9 +230,9 @@ export default function App() {
       if (!response.ok) throw new Error("Could not contact persistent state server");
       const data = await response.json();
 
-      // Load local project state and merge with server state (scoped to this user)
+      // Load local project state and merge with server state (scoped to this user and workspace)
       const currentDevId = activeDevId;
-      const localProject = loadLocalProjectData(currentDevId);
+      const localProject = loadLocalProjectData(activeWorkspaceId, currentDevId);
       const merged = {
         ...data,
         ...localProject,
@@ -233,8 +252,11 @@ export default function App() {
   };
 
   const fetchPublicDevs = async () => {
+    // Developers list is now queried dynamically per workspace if needed, 
+    // but since we removed the quick roster it's mostly unused.
+    if (!activeWorkspaceId) return;
     try {
-      const response = await fetch("/api/auth/developers");
+      const response = await fetch(`/api/auth/developers?workspaceId=${encodeURIComponent(activeWorkspaceId)}`);
       if (response.ok) {
         const data = await response.json();
         setPublicDevs(data);
@@ -250,12 +272,12 @@ export default function App() {
     } else {
       fetchPublicDevs();
     }
-  }, [sessionToken]);
+  }, [sessionToken, activeWorkspaceId]);
 
   // Synchronize state changes to server JSON DB securely
   const handleSaveState = async (updatedState: AppState, rawGeminiKeyToSend?: string) => {
     // 1. Save project-specific fields strictly to local storage (zero-knowledge, user-scoped)
-    saveLocalProjectData(activeDevId, updatedState);
+    saveLocalProjectData(activeWorkspaceId, activeDevId, updatedState);
 
     // 2. Perform instant optimistic local state update for responsiveness
     setState(updatedState);
@@ -267,7 +289,9 @@ export default function App() {
       const payload: any = {
         developers: updatedState.developers,
         settings: {
-          geminiApiKeyHash: updatedState.settings?.geminiApiKeyHash || ""
+          geminiApiKeyHash: updatedState.settings?.geminiApiKeyHash || "",
+          notifications: updatedState.settings?.notifications || [],
+          recoveryPasscodes: updatedState.settings?.recoveryPasscodes || []
         }
       };
 
@@ -290,7 +314,7 @@ export default function App() {
       if (!response.ok) throw new Error("Could not sync state to server");
       const data = await response.json();
       if (data.state) {
-        const localProject = loadLocalProjectData(activeDevId);
+        const localProject = loadLocalProjectData(activeWorkspaceId, activeDevId);
         const merged = {
           ...data.state,
           ...localProject,
@@ -316,7 +340,7 @@ export default function App() {
     try {
       // 1. Reset client-side project data for this user
       if (activeDevId) {
-        localStorage.removeItem(getProjectDataKey(activeDevId));
+        localStorage.removeItem(getProjectDataKey(activeWorkspaceId, activeDevId));
       }
 
       const response = await fetch("/api/state/reset", { 
@@ -358,13 +382,14 @@ export default function App() {
   };
 
   // ENFORCE AUTHENTICATION: Show LoginScreen if not authenticated
-  if (!sessionToken || !activeDevId) {
+  if (!sessionToken || !activeDevId || !activeWorkspaceId) {
     return (
       <LoginScreen
         developers={publicDevs}
-        onLoginSuccess={(token, devId, rememberMe) => {
+        onLoginSuccess={(token, devId, rememberMe, workspaceId) => {
           handleSetSessionToken(token, rememberMe);
           handleSetActiveDevId(devId, rememberMe);
+          handleSetActiveWorkspaceId(workspaceId, rememberMe);
         }}
       />
     );
@@ -415,41 +440,69 @@ export default function App() {
   return (
     <div className={`flex bg-beige-50 min-h-screen text-coffee-800 antialiased font-sans transition-colors duration-200 ${isDarkMode ? "dark bg-[#150E0A] text-[#ECE4DE]" : ""}`}>
       
-      {/* GLOBAL OVERLAYS */}
+      {/* GLOBAL OVERLAYS — always-visible toasts with solid opaque backdrop */}
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
         {unreadNotifications.map((n: any) => (
-          <div key={n.id} className="bg-white dark:bg-[#1C1410] border border-teal-500/30 p-3 rounded-lg shadow-lg max-w-sm pointer-events-auto flex items-start gap-3 animate-in slide-in-from-right-8">
-            <Info className="h-5 w-5 text-teal-500 shrink-0" />
-            <div className="flex-1">
-              <h4 className="text-xs font-bold text-coffee-800 dark:text-white mb-1">New Member Announcement</h4>
-              <p className="text-[10px] text-slate-600 dark:text-slate-400">{n.message}</p>
+          <div
+            key={n.id}
+            className="bg-[#0F1F1A] border border-teal-500 p-3 rounded-xl shadow-2xl max-w-sm pointer-events-auto flex items-start gap-3 animate-in slide-in-from-right-8 backdrop-blur-md"
+          >
+            <Info className="h-4 w-4 text-teal-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-teal-300 mb-0.5">New Member Announcement</h4>
+              <p className="text-[10px] text-slate-300 leading-snug">{n.message}</p>
             </div>
-            <button onClick={() => handleDismissNotification(n.id)} className="text-[10px] text-teal-600 hover:underline">Dismiss</button>
+            <button
+              onClick={() => handleDismissNotification(n.id)}
+              className="text-[9px] font-bold text-teal-400 hover:text-white bg-teal-900/60 hover:bg-teal-700 px-2 py-1 rounded transition-colors shrink-0"
+            >
+              Dismiss
+            </button>
           </div>
         ))}
+
         {loggedInDev.isHead && activePasscodes.map((rp: any) => (
-          <div key={rp.passcode} className="bg-amber-50 dark:bg-amber-950/30 border border-amber-500/50 p-3 rounded-lg shadow-lg max-w-sm pointer-events-auto flex items-start gap-3 animate-in slide-in-from-right-8">
-            <Info className="h-5 w-5 text-amber-600 shrink-0" />
-            <div className="flex-1">
-              <h4 className="text-xs font-bold text-amber-800 dark:text-amber-400 mb-1">Passcode Request</h4>
-              <p className="text-[10px] text-amber-700 dark:text-amber-200 mb-1">
-                A password reset was requested for user: <strong>{rp.userId}</strong>
+          <div
+            key={rp.passcode}
+            className="bg-[#1F1500] border border-amber-500 p-3 rounded-xl shadow-2xl max-w-sm pointer-events-auto flex items-start gap-3 animate-in slide-in-from-right-8 backdrop-blur-md"
+          >
+            <Info className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-amber-300 mb-0.5">🔑 Passcode Request</h4>
+              <p className="text-[10px] text-amber-200 mb-1.5">
+                Password reset requested for: <strong className="text-white">{rp.userId}</strong>
               </p>
-              <p className="text-xs font-mono font-bold bg-amber-200 dark:bg-amber-900 px-2 py-1 rounded inline-block">
+              <p className="text-xs font-mono font-bold bg-amber-900/60 border border-amber-700 text-amber-200 px-2 py-1 rounded-lg inline-block tracking-widest">
                 {rp.passcode}
               </p>
             </div>
-            <button onClick={() => handleDismissPasscode(rp.passcode)} className="px-2 py-1 bg-amber-600 text-white rounded text-[10px] font-bold hover:bg-amber-700">Done</button>
+            <button
+              onClick={() => handleDismissPasscode(rp.passcode)}
+              className="text-[9px] font-bold text-amber-900 bg-amber-400 hover:bg-amber-300 px-2 py-1 rounded transition-colors shrink-0"
+            >
+              Done
+            </button>
           </div>
         ))}
+
         {loggedInDev.passwordChangedAt === null && (
-          <div className="bg-teal-50 dark:bg-teal-950/30 border border-teal-500/50 p-3 rounded-lg shadow-lg max-w-sm pointer-events-auto flex items-start gap-3 animate-in slide-in-from-right-8">
-            <Info className="h-5 w-5 text-teal-600 shrink-0" />
-            <div className="flex-1">
-              <h4 className="text-xs font-bold text-teal-800 dark:text-teal-400 mb-1">Security Reminder</h4>
-              <p className="text-[10px] text-teal-700 dark:text-teal-200">
-                You are using the default password. Please update your password in Settings.
+          <div
+            className="bg-[#1A0F00] border-2 border-amber-500 p-3.5 rounded-xl shadow-2xl max-w-sm pointer-events-auto flex items-start gap-3 animate-in slide-in-from-right-8 backdrop-blur-md"
+          >
+            <div className="h-8 w-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center shrink-0">
+              <Info className="h-4 w-4 text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-bold text-amber-300 mb-0.5">⚠️ Security Reminder</h4>
+              <p className="text-[10px] text-amber-100/80 leading-snug">
+                You are using the <span className="text-amber-300 font-bold">default password</span>. Update it in Settings to secure your account.
               </p>
+              <button
+                onClick={() => setShowProfileModal(true)}
+                className="mt-1.5 text-[9px] font-bold text-amber-900 bg-amber-400 hover:bg-amber-300 px-2.5 py-1 rounded-md transition-colors"
+              >
+                Open Settings →
+              </button>
             </div>
           </div>
         )}

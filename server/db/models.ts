@@ -5,6 +5,7 @@ const BCRYPT_SALT_ROUNDS = 10;
 
 const developerSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
+  workspaceId: { type: String, required: true },
   name: { type: String, required: true },
   avatar: { type: String },
   email: { type: String },
@@ -33,7 +34,7 @@ const developerSchema = new mongoose.Schema({
 export const Developer = mongoose.model("Developer", developerSchema);
 
 const settingsSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, default: "global-settings" },
+  workspaceId: { type: String, required: true, unique: true },
   geminiApiKeyHash: { type: String, default: "" },
   geminiApiKeyEncrypted: { type: String, default: "" },
   notifications: { type: Array, default: [] },

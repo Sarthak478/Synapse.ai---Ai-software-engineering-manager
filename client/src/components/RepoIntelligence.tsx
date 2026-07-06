@@ -230,95 +230,95 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
       <div className="flex flex-col gap-6">
         
         {/* Repo Select Panel */}
-        <div className="bg-white p-5 rounded-lg border border-slate-200/50 shadow-xs text-left">
-          <h3 className="font-sans font-bold text-slate-950 text-sm mb-3">Connected Codebases</h3>
-          <div className="flex flex-col gap-2 font-sans">
-            {state.repositories.map(r => (
-              <button
-                key={r.id}
-                onClick={() => setSelectedRepoId(r.id)}
-                className={`w-full p-4 rounded-lg border flex flex-col gap-1 transition-all duration-150 text-left ${
-                  selectedRepoId === r.id
-                    ? "bg-indigo-50/30 border-indigo-200/80 outline-none"
-                    : "border-slate-100 hover:border-slate-200"
-                }`}
-              >
-                <div className="flex items-center justify-between font-sans">
-                  <span className="font-sans font-bold text-xs text-slate-800">{r.name}</span>
-                  {r.scanned ? (
-                    <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                      <CheckCircle2 className="h-2.5 w-2.5" />
-                      SCANNED
-                    </span>
-                  ) : (
-                    <span className="text-[9px] font-mono bg-slate-100 text-slate-400 px-2 py-0.5 rounded">UNSCANNED</span>
-                  )}
-                </div>
-                <span className="text-[10px] font-mono text-slate-500 truncate mt-1">{r.url}</span>
-              </button>
-            ))}
-          </div>
+      <div className="bg-white dark:bg-[#1A120C] p-5 rounded-lg border border-slate-200/50 dark:border-[#3D2E24] shadow-xs text-left">
+        <h3 className="font-sans font-bold text-slate-950 dark:text-[#ECE4DE] text-sm mb-3">Connected Codebases</h3>
+        <div className="flex flex-col gap-2 font-sans">
+          {state.repositories.map(r => (
+            <button
+              key={r.id}
+              onClick={() => setSelectedRepoId(r.id)}
+              className={`w-full p-4 rounded-lg border flex flex-col gap-1 transition-all duration-150 text-left ${
+                selectedRepoId === r.id
+                  ? "bg-indigo-50/30 dark:bg-indigo-900/20 border-indigo-200/80 dark:border-indigo-700/50 outline-none"
+                  : "border-slate-100 dark:border-[#3D2E24] hover:border-slate-200 dark:hover:border-[#4D3D33]"
+              }`}
+            >
+              <div className="flex items-center justify-between font-sans">
+                <span className="font-sans font-bold text-xs text-slate-800 dark:text-slate-200">{r.name}</span>
+                {r.scanned ? (
+                  <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                    <CheckCircle2 className="h-2.5 w-2.5" />
+                    SCANNED
+                  </span>
+                ) : (
+                  <span className="text-[9px] font-mono bg-slate-100 text-slate-400 px-2 py-0.5 rounded">UNSCANNED</span>
+                )}
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 truncate mt-1">{r.url}</span>
+            </button>
+          ))}
         </div>
+      </div>
 
         {/* Connect New Codebase Form */}
-        <div className="bg-white p-6 rounded-lg border border-slate-200/50 shadow-xs text-left">
-          <div className="flex items-center gap-2 mb-3 font-sans">
-            <PlusCircle className="h-5 w-5 text-indigo-600" />
-            <h3 className="font-sans font-bold text-slate-950 text-sm">Add GitHub Repository</h3>
-          </div>
-          <p className="text-xs text-slate-500 mb-4 leading-relaxed font-sans">Connect a public URL or codebase structure description to initiate an AI stacking analysis and dependency mapping.</p>
-
-          <form onSubmit={handleConnectRepo} className="flex flex-col gap-3 font-sans">
-            <div>
-              <label className="block text-[10px] uppercase font-mono font-bold text-slate-400 mb-1">Repo Name</label>
-              <input
-                type="text"
-                value={newRepoName}
-                onChange={e => setNewRepoName(e.target.value)}
-                placeholder="e.g. Fintech Microservices Core"
-                className="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase font-mono font-bold text-slate-400 mb-1 font-sans">GitHub Clone URL</label>
-              <input
-                type="url"
-                value={newRepoUrl}
-                onChange={e => setNewRepoUrl(e.target.value)}
-                placeholder="e.g. https://github.com/tech/core"
-                className="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase font-mono font-bold text-slate-400 mb-1 font-sans font-sans">Brief Description ($ specs)</label>
-              <textarea
-                value={newRepoDesc}
-                onChange={e => setNewRepoDesc(e.target.value)}
-                placeholder="Database Postgres, handles logins, Apollo GraphQL services, Redis keys..."
-                className="w-full text-xs p-2.5 border border-slate-200 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100 h-24 resize-none"
-                required
-              ></textarea>
-            </div>
-            <button
-              type="submit"
-              disabled={isScanning}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-slate-100 text-white duration-150 rounded-lg font-bold text-xs tracking-tight shadow-sm flex items-center justify-center gap-1.5 cursor-pointer font-sans"
-            >
-              {isScanning ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin text-white" />
-                  Scanning Repository Content...
-                </>
-              ) : (
-                <>
-                  Connect & Parse Stack
-                </>
-              )}
-            </button>
-          </form>
+      <div className="bg-white dark:bg-[#1A120C] p-6 rounded-lg border border-slate-200/50 dark:border-[#3D2E24] shadow-xs text-left">
+        <div className="flex items-center gap-2 mb-3 font-sans">
+          <PlusCircle className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+          <h3 className="font-sans font-bold text-slate-950 dark:text-[#ECE4DE] text-sm">Add GitHub Repository</h3>
         </div>
+        <p className="text-xs text-slate-500 mb-4 leading-relaxed font-sans">Connect a public URL or codebase structure description to initiate an AI stacking analysis and dependency mapping.</p>
+
+        <form onSubmit={handleConnectRepo} className="flex flex-col gap-3 font-sans">
+          <div>
+            <label className="block text-[10px] uppercase font-mono font-bold text-slate-400 mb-1">Repo Name</label>
+            <input
+              type="text"
+              value={newRepoName}
+              onChange={e => setNewRepoName(e.target.value)}
+              placeholder="e.g. Fintech Microservices Core"
+              className="w-full text-xs p-2.5 bg-transparent dark:bg-[#251A13] border border-slate-200 dark:border-[#3D2E24] text-slate-900 dark:text-[#ECE4DE] rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100 dark:focus:ring-indigo-900/50"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase font-mono font-bold text-slate-400 mb-1 font-sans">GitHub Clone URL</label>
+            <input
+              type="url"
+              value={newRepoUrl}
+              onChange={e => setNewRepoUrl(e.target.value)}
+              placeholder="e.g. https://github.com/tech/core"
+              className="w-full text-xs p-2.5 bg-transparent dark:bg-[#251A13] border border-slate-200 dark:border-[#3D2E24] text-slate-900 dark:text-[#ECE4DE] rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100 dark:focus:ring-indigo-900/50"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase font-mono font-bold text-slate-400 mb-1 font-sans font-sans">Brief Description ($ specs)</label>
+            <textarea
+              value={newRepoDesc}
+              onChange={e => setNewRepoDesc(e.target.value)}
+              placeholder="Database Postgres, handles logins, Apollo GraphQL services, Redis keys..."
+              className="w-full text-xs p-2.5 bg-transparent dark:bg-[#251A13] border border-slate-200 dark:border-[#3D2E24] text-slate-900 dark:text-[#ECE4DE] rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-100 dark:focus:ring-indigo-900/50 h-24 resize-none"
+              required
+            ></textarea>
+          </div>
+          <button
+            type="submit"
+            disabled={isScanning}
+            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-slate-100 text-white duration-150 rounded-lg font-bold text-xs tracking-tight shadow-sm flex items-center justify-center gap-1.5 cursor-pointer font-sans"
+          >
+            {isScanning ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                Scanning Repository Content...
+              </>
+            ) : (
+              <>
+                Connect & Parse Stack
+              </>
+            )}
+          </button>
+        </form>
+      </div>
 
       </div>
 
@@ -327,15 +327,15 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
         {activeRepo ? (
           <>
             {/* Repository Info & Stack Detection */}
-            <div className="bg-white p-6 rounded-lg border border-slate-200/50 shadow-xs text-left">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4 mb-4 font-sans font-sans">
+            <div className="bg-white dark:bg-[#1A120C] p-6 rounded-lg border border-slate-200/50 dark:border-[#3D2E24] shadow-xs text-left">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-[#3D2E24] pb-4 mb-4 font-sans font-sans">
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-550"></span>
                     </span>
-                    <h2 className="text-lg font-bold text-slate-900 tracking-tight">{activeRepo.name}</h2>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-[#ECE4DE] tracking-tight">{activeRepo.name}</h2>
                   </div>
                   <span className="text-xs text-slate-400 font-mono block mt-1">{activeRepo.url}</span>
                 </div>
@@ -343,7 +343,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                   <button
                     onClick={() => handleRescanRepo(activeRepo)}
                     disabled={isScanning}
-                    className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-650 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-1.5 cursor-pointer font-sans"
+                    className="px-3 py-1.5 border border-slate-200 dark:border-[#3D2E24] rounded-lg text-xs font-semibold text-slate-650 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#251A13] hover:text-slate-900 dark:hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer font-sans"
                   >
                     {isScanning ? <Loader2 className="h-3 w-3 animate-spin text-slate-500" /> : <GitFork className="h-3.5 w-3.5" />}
                     Refresh Architecture Scan
@@ -358,7 +358,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                   <span className="block text-[10px] uppercase font-mono font-bold text-slate-400 mb-2">Detected Tech Stack</span>
                   <div className="flex flex-wrap gap-1.5">
                     {activeRepo.stack?.map((tech, i) => (
-                      <span key={i} className="px-2.5 py-1 bg-slate-100 text-slate-700 font-mono text-[11px] font-bold rounded">
+                      <span key={i} className="px-2.5 py-1 bg-slate-100 dark:bg-[#251A13] border border-transparent dark:border-[#3D2E24] text-slate-700 dark:text-slate-300 font-mono text-[11px] font-bold rounded">
                         {tech}
                       </span>
                     ))}
@@ -373,7 +373,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                   <span className="block text-[10px] uppercase font-mono font-bold text-slate-400 mb-2">Data Ecosystem</span>
                   <div className="flex flex-wrap gap-1.5">
                     {activeRepo.databases?.map((db, i) => (
-                      <span key={i} className="px-2.5 py-1 bg-blue-50 text-blue-700 font-mono text-[11px] font-bold rounded flex items-center gap-1">
+                      <span key={i} className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/30 border border-transparent dark:border-blue-900/50 text-blue-700 dark:text-blue-300 font-mono text-[11px] font-bold rounded flex items-center gap-1">
                         <Database className="h-3 w-3" />
                         {db}
                       </span>
@@ -384,10 +384,10 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
             </div>
 
             {/* GitHub Webhook status & Live State Synchronizer */}
-            <div className="bg-white rounded-lg border border-slate-200/50 shadow-xs p-6 text-left flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4 font-sans">
+            <div className="bg-white dark:bg-[#1A120C] rounded-lg border border-slate-200/50 dark:border-[#3D2E24] shadow-xs p-6 text-left flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-[#3D2E24] pb-4 font-sans">
                 <div>
-                  <h3 className="font-sans font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <h3 className="font-sans font-bold text-slate-900 dark:text-[#ECE4DE] text-sm flex items-center gap-2">
                     <Radio className="h-4 w-4 text-emerald-500 animate-pulse" />
                     GitHub Webhooks & Active Sync State
                   </h3>
@@ -418,12 +418,12 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
 
               {/* Progress Stepper Log during Active Syncing */}
               {isSyncingWebhooks && (
-                <div className="p-4 bg-indigo-50/40 rounded-lg border border-indigo-150/80 flex flex-col gap-3 animate-fade-in font-sans">
+                <div className="p-4 bg-indigo-50/40 dark:bg-indigo-950/20 rounded-lg border border-indigo-150/80 dark:border-indigo-900/50 flex flex-col gap-3 animate-fade-in font-sans">
                   <div className="flex items-center justify-between font-sans">
-                    <span className="text-[10px] font-mono text-indigo-755 font-bold uppercase tracking-wider block">
+                    <span className="text-[10px] font-mono text-indigo-755 dark:text-indigo-400 font-bold uppercase tracking-wider block">
                       Sync Progress Log (Stage {syncStage + 1} of {syncSteps.length})
                     </span>
-                    <span className="text-[11px] font-medium text-indigo-600 font-mono animate-pulse">Running HMAC verification...</span>
+                    <span className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 font-mono animate-pulse">Running HMAC verification...</span>
                   </div>
                   
                   {/* Visual simulation checklist nodes */}
@@ -436,12 +436,12 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                           {isDone ? (
                             <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                           ) : isCurrent ? (
-                            <Loader2 className="h-3.5 w-3.5 text-indigo-600 animate-spin shrink-0" />
+                            <Loader2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 animate-spin shrink-0" />
                           ) : (
-                            <span className="h-3.5 w-3.5 rounded-full bg-slate-100 border border-slate-200 inline-block shrink-0"></span>
+                            <span className="h-3.5 w-3.5 rounded-full bg-slate-100 dark:bg-[#251A13] border border-slate-200 dark:border-[#3D2E24] inline-block shrink-0"></span>
                           )}
                           <span className={`font-medium ${
-                            isDone ? "text-slate-550 line-through font-normal" : isCurrent ? "text-slate-900 font-bold" : "text-slate-400"
+                            isDone ? "text-slate-550 dark:text-slate-500 line-through font-normal" : isCurrent ? "text-slate-900 dark:text-[#ECE4DE] font-bold" : "text-slate-400"
                           }`}>
                             {step}
                           </span>
@@ -453,25 +453,25 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
               )}
 
               {/* Active Webhook Status Grid & Details */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50/50 p-4 rounded-lg border border-slate-150 font-sans">
-                <div className="bg-white p-3.5 rounded-lg border border-slate-150/85">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50/50 dark:bg-[#251A13] p-4 rounded-lg border border-slate-150 dark:border-[#3D2E24] font-sans">
+                <div className="bg-white dark:bg-[#1C1410] p-3.5 rounded-lg border border-slate-150/85 dark:border-[#3D2E24]">
                   <span className="block text-[8px] font-mono text-slate-400 font-extrabold uppercase leading-none">WEBHOOK ENDPOINT</span>
-                  <span className="text-xs font-bold text-slate-800 tracking-tight block mt-1.5 truncate">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 tracking-tight block mt-1.5 truncate">
                     https://api.pma-copilot.com/webhooks/github
                   </span>
                   <span className="text-[10px] font-mono text-slate-400 mt-1 block">SSL Handshake Active</span>
                 </div>
-                <div className="bg-white p-3.5 rounded-lg border border-slate-150/85">
+                <div className="bg-white dark:bg-[#1C1410] p-3.5 rounded-lg border border-slate-150/85 dark:border-[#3D2E24]">
                   <span className="block text-[8px] font-mono text-slate-400 font-extrabold uppercase leading-none">ACTIVE EVENTS</span>
                   <div className="flex flex-wrap gap-1 mt-1.5">
-                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold bg-indigo-50 text-indigo-700 rounded border border-indigo-100">push</span>
-                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold bg-indigo-50 text-indigo-700 rounded border border-indigo-100">pull_request</span>
-                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold bg-indigo-50 text-indigo-700 rounded border border-indigo-100">issue</span>
+                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 rounded border border-indigo-100 dark:border-indigo-900/50">push</span>
+                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 rounded border border-indigo-100 dark:border-indigo-900/50">pull_request</span>
+                    <span className="px-1.5 py-0.2 text-[9px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 rounded border border-indigo-100 dark:border-indigo-900/50">issue</span>
                   </div>
                 </div>
-                <div className="bg-white p-3.5 rounded-lg border border-slate-150/85">
+                <div className="bg-white dark:bg-[#1C1410] p-3.5 rounded-lg border border-slate-150/85 dark:border-[#3D2E24]">
                   <span className="block text-[8px] font-mono text-slate-400 font-extrabold uppercase leading-none font-sans">LAST SYNCHRONIZED</span>
-                  <span className="text-xs font-bold text-slate-800 block mt-1.5 flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mt-1.5 flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                     {webhookLastSynced}
                   </span>
@@ -484,15 +484,15 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                 <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block mb-2 font-sans">
                   RECENT SECURE WEBHOOK PAYLOADS
                 </span>
-                <div className="border border-slate-150 rounded-lg overflow-hidden bg-white">
-                  <div className="divide-y divide-slate-100 max-h-[140px] overflow-y-auto">
+                <div className="border border-slate-150 dark:border-[#3D2E24] rounded-lg overflow-hidden bg-white dark:bg-[#1C1410]">
+                  <div className="divide-y divide-slate-100 dark:divide-[#3D2E24] max-h-[140px] overflow-y-auto">
                     {webhookLogs.map((log) => (
-                      <div key={log.id} className="p-3 hover:bg-slate-50 transition-colors flex items-start sm:items-center justify-between gap-3 text-xs font-sans">
+                      <div key={log.id} className="p-3 hover:bg-slate-50 dark:hover:bg-[#251A13] transition-colors flex items-start sm:items-center justify-between gap-3 text-xs font-sans">
                         <div className="flex items-start sm:items-center gap-3 min-w-0">
                           <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0 mt-2 sm:mt-0" title="Delivered successfully"></span>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-mono text-[9px] font-black uppercase text-indigo-600 bg-indigo-50 px-1.5 rounded border border-indigo-100">
+                              <span className="font-mono text-[9px] font-black uppercase text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/30 px-1.5 rounded border border-indigo-100 dark:border-indigo-900/50">
                                 {log.event}
                               </span>
                               {log.branch && (
@@ -502,14 +502,14 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                               )}
                               <span className="text-slate-400 text-[10px]">by {log.author}</span>
                             </div>
-                            <p className="text-[11px] text-slate-850 font-semibold truncate mt-0.5 max-w-[340px] font-sans">
+                            <p className="text-[11px] text-slate-850 dark:text-slate-300 font-semibold truncate mt-0.5 max-w-[340px] font-sans">
                               {log.message || log.title}
                             </p>
                           </div>
                         </div>
                         <div className="text-right shrink-0">
                           <span className="text-[9.5px] font-mono text-slate-400 block">{log.time}</span>
-                          <span className="text-[9px] font-mono font-black text-emerald-700 bg-emerald-50 px-1 rounded block mt-0.5">
+                          <span className="text-[9px] font-mono font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 px-1 rounded block mt-0.5">
                             {log.status.toUpperCase()}
                           </span>
                         </div>
@@ -521,11 +521,11 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
             </div>
 
             {/* Architecture Map Canvas */}
-            <div className="bg-white rounded-lg border border-slate-200/50 shadow-xs p-6 text-left flex flex-col gap-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4 font-sans">
+            <div className="bg-white dark:bg-[#1A120C] rounded-lg border border-slate-200/50 dark:border-[#3D2E24] shadow-xs p-6 text-left flex flex-col gap-4">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-[#3D2E24] pb-4 font-sans">
                 <div>
-                  <h3 className="font-sans font-bold text-slate-900 text-sm flex items-center gap-1.5 font-sans">
-                    <Network className="h-4 w-4 text-indigo-600" />
+                  <h3 className="font-sans font-bold text-slate-900 dark:text-[#ECE4DE] text-sm flex items-center gap-1.5 font-sans">
+                    <Network className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                     Interactive Architecture Map & Tracer
                   </h3>
                   <p className="text-xs text-slate-400">Search nodes or click to trace downstream impact & upstream dependencies.</p>
@@ -545,7 +545,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
 
               {/* Node Detailed Information Drawer */}
               {activeNodeId ? (
-                <div className="p-4 rounded-lg border border-slate-150 bg-slate-50/50 mt-1 font-sans">
+                <div className="p-4 rounded-lg border border-slate-150 dark:border-[#3D2E24] bg-slate-50/50 dark:bg-[#251A13] mt-1 font-sans">
                   {(() => {
                     const nodeObj = activeRepo.architecture?.nodes.find(n => n.id === activeNodeId);
                     if (!nodeObj) return null;
@@ -566,11 +566,11 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
 
                     return (
                       <div className="text-left flex flex-col gap-2 font-sans">
-                        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                          <span className="text-xs font-bold text-slate-900">{nodeObj.label.split("\n").join(" ")}</span>
-                          <span className="text-[10px] font-mono bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold uppercase">{nodeObj.type}</span>
+                        <div className="flex items-center justify-between border-b border-slate-200 dark:border-[#3D2E24] pb-2">
+                          <span className="text-xs font-bold text-slate-900 dark:text-[#ECE4DE]">{nodeObj.label.split("\n").join(" ")}</span>
+                          <span className="text-[10px] font-mono bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 px-2 py-0.5 rounded font-bold uppercase">{nodeObj.type}</span>
                         </div>
-                        <p className="text-xs text-slate-600 mt-1 leading-relaxed font-sans">{nodeDesc}</p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed font-sans">{nodeDesc}</p>
                         
                         {/* Display endpoints if it's gateway/service */}
                         {(nodeObj.type === "gateway" || nodeObj.type === "service") && relatedAPIs.length > 0 && (
@@ -578,13 +578,13 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                             <span className="block text-[9px] font-mono font-bold text-slate-400 uppercase mb-2">Exposed API Endpoints</span>
                             <div className="flex flex-col gap-1">
                               {relatedAPIs.map((api, k) => (
-                                <div key={k} className="flex items-center gap-2 text-[10px] bg-white p-2 border border-slate-200 rounded font-sans">
+                                <div key={k} className="flex items-center gap-2 text-[10px] bg-white dark:bg-[#1C1410] p-2 border border-slate-200 dark:border-[#3D2E24] rounded font-sans">
                                   <span className={`font-mono font-bold text-[9px] px-1.5 py-0.5 rounded ${
-                                    api.method === "POST" ? "bg-indigo-50 text-indigo-700" :
-                                    api.method === "GET" ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-650"
+                                    api.method === "POST" ? "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300" :
+                                    api.method === "GET" ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300" : "bg-slate-100 dark:bg-slate-800 text-slate-650 dark:text-slate-300"
                                   }`}>{api.method}</span>
-                                  <span className="font-mono font-semibold text-slate-800">{api.path}</span>
-                                  <span className="text-slate-450 truncate text-[10px]">&mdash; {api.description}</span>
+                                  <span className="font-mono font-semibold text-slate-800 dark:text-[#ECE4DE]">{api.path}</span>
+                                  <span className="text-slate-450 dark:text-slate-500 truncate text-[10px]">&mdash; {api.description}</span>
                                 </div>
                               ))}
                             </div>
@@ -595,32 +595,32 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                   })()}
                 </div>
               ) : (
-                <div className="text-center p-4 border border-dashed border-slate-200 rounded-lg text-xs text-slate-400 font-sans">
+                <div className="text-center p-4 border border-dashed border-slate-200 dark:border-[#3D2E24] rounded-lg text-xs text-slate-400 font-sans">
                   Select a module node on the map to inspect microservice API endpoints or routing pipelines.
                 </div>
               )}
             </div>
 
             {/* Mapped Modules / Paths Overview */}
-            <div className="bg-white rounded-lg border border-slate-200/50 shadow-xs p-6 text-left font-sans">
-              <span className="text-xs font-mono text-indigo-600 font-bold tracking-wider uppercase mb-1 block">CODEBASE DEPENDENCY MAP</span>
-              <h3 className="font-sans font-bold text-slate-950 text-sm mb-3">Modular Organization</h3>
+            <div className="bg-white dark:bg-[#1A120C] rounded-lg border border-slate-200/50 dark:border-[#3D2E24] shadow-xs p-6 text-left font-sans">
+              <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-bold tracking-wider uppercase mb-1 block">CODEBASE DEPENDENCY MAP</span>
+              <h3 className="font-sans font-bold text-slate-950 dark:text-[#ECE4DE] text-sm mb-3">Modular Organization</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {activeRepo.modules?.map((mod, i) => (
-                  <div key={i} className="p-4 border border-slate-150 hover:border-slate-200 hover:bg-slate-50/20 transition-all rounded-lg flex flex-col justify-between font-sans">
+                  <div key={i} className="p-4 border border-slate-150 dark:border-[#3D2E24] hover:border-slate-200 dark:hover:border-indigo-900/50 hover:bg-slate-50/20 dark:hover:bg-[#251A13] transition-all rounded-lg flex flex-col justify-between font-sans">
                     <div>
                       <div className="flex items-center justify-between font-sans">
-                        <span className="text-xs font-bold text-slate-800 tracking-tight">{mod.name}</span>
+                        <span className="text-xs font-bold text-slate-800 dark:text-[#ECE4DE] tracking-tight">{mod.name}</span>
                         <span className="text-[10px] font-mono text-slate-400 uppercase">{mod.type}</span>
                       </div>
                       <p className="text-xs text-slate-500 mt-1 font-sans leading-relaxed">{mod.description || "Core file structure mapping references and logic bindings."}</p>
                     </div>
                     {mod.deps.length > 0 && (
-                      <div className="flex items-center gap-1 bg-slate-50 px-2 py-1.5 rounded-lg border border-slate-155 mt-3 flex-wrap font-sans">
+                      <div className="flex items-center gap-1 bg-slate-50 dark:bg-[#1C1410] px-2 py-1.5 rounded-lg border border-slate-155 dark:border-[#3D2E24] mt-3 flex-wrap font-sans">
                         <span className="text-[9px] font-mono font-bold text-slate-400 uppercase shrink-0">Binds To:</span>
                         {mod.deps.map((dep, k) => (
-                          <span key={k} className="text-[10px] bg-white text-slate-700 font-medium px-2 py-0.5 rounded border border-slate-200">
+                          <span key={k} className="text-[10px] bg-white dark:bg-[#251A13] text-slate-700 dark:text-slate-300 font-medium px-2 py-0.5 rounded border border-slate-200 dark:border-[#4D3D33]">
                             {dep}
                           </span>
                         ))}
@@ -632,7 +632,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
             </div>
           </>
         ) : (
-          <div className="p-16 border border-dashed border-slate-200 rounded-lg text-center text-slate-400 bg-white font-sans">
+          <div className="p-16 border border-dashed border-slate-200 dark:border-[#3D2E24] rounded-lg text-center text-slate-400 bg-white dark:bg-[#1A120C] font-sans">
             Please select or connect a GitHub repository to run analytical scans.
           </div>
         )}

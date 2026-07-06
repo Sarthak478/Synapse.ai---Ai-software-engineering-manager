@@ -56,7 +56,7 @@ export function verifyPassword(plain: string, hash: string): boolean {
 
 // Strict allowlist of developer fields that may be stored to disk/DB
 const DEV_DISK_FIELDS = [
-  "id", "name", "avatar", "email", "role", "skills",
+  "id", "workspaceId", "name", "avatar", "email", "role", "skills",
   "workloadPoints", "velocity", "activeTaskId", "isHead",
   "userId", "password", "passwordChangedAt", "addedBy", "personalCredentials", "contributions"
 ] as const;
@@ -81,20 +81,21 @@ export const defaultState = {
   }
 };
 
-export async function getState() {
+export async function getState(workspaceId: string = "default-workspace") {
   await connectDB();
+  const cleanWorkspaceId = workspaceId.trim().toLowerCase();
   
   try {
-    const devs = await Developer.find({}).lean();
-    let settingsDoc = await Settings.findOne({ id: "global-settings" }).lean();
+    const devs = await Developer.find({ workspaceId: cleanWorkspaceId }).lean();
+    let settingsDoc = await Settings.findOne({ workspaceId: cleanWorkspaceId }).lean();
     
-    // Initial setup: create settings document if it doesn't exist yet
+    // Initial setup: create settings document if it doesn't exist yet for this workspace
     if (!settingsDoc) {
-      console.log("Initializing fresh workspace (no developers yet)...");
-      settingsDoc = await Settings.create({ id: "global-settings", geminiApiKeyHash: "" });
+      console.log(`Initializing fresh settings for workspace: ${cleanWorkspaceId}...`);
+      settingsDoc = await Settings.create({ workspaceId: cleanWorkspaceId, geminiApiKeyHash: "" });
     }
 
-    // If no developers exist yet, return empty state (first user will register via /register)
+    // If no developers exist yet, return empty state
     if (devs.length === 0) {
       return {
         developers: [],
@@ -108,7 +109,6 @@ export async function getState() {
     }
     
     // Safety check and migration
-    let updated = false;
     const parsedDevs = await Promise.all(devs.map(async (d: any) => {
       let docUpdated = false;
       if (!d.userId) {
@@ -130,14 +130,10 @@ export async function getState() {
         docUpdated = true;
       }
       if (docUpdated) {
-        await Developer.updateOne({ id: d.id }, { $set: d });
+        await Developer.updateOne({ id: d.id, workspaceId: cleanWorkspaceId }, { $set: d });
       }
       return d;
     }));
-
-    if (!settingsDoc) {
-      settingsDoc = await Settings.create({ id: "global-settings", geminiApiKeyHash: "" });
-    }
 
     return {
       developers: parsedDevs,
@@ -158,28 +154,31 @@ export async function getState() {
   }
 }
 
-export async function saveState(state: any) {
+export async function saveState(state: any, workspaceId: string = "default-workspace") {
   await connectDB();
+  const cleanWorkspaceId = workspaceId.trim().toLowerCase();
   
   try {
     if (Array.isArray(state.developers)) {
       for (const d of state.developers) {
         const safeDev = sanitizeDevForDisk(d);
+        // Force the workspaceId on all saved devs to maintain separation
+        safeDev.workspaceId = cleanWorkspaceId;
         await Developer.updateOne(
-          { id: safeDev.id },
+          { id: safeDev.id, workspaceId: cleanWorkspaceId },
           { $set: safeDev },
           { upsert: true }
         );
       }
       
-      // Remove devs that are not in the state
+      // Remove devs that are not in the state but belong to this workspace
       const incomingIds = state.developers.map((d: any) => d.id);
-      await Developer.deleteMany({ id: { $nin: incomingIds } });
+      await Developer.deleteMany({ id: { $nin: incomingIds }, workspaceId: cleanWorkspaceId });
     }
 
     if (state.settings) {
       await Settings.updateOne(
-        { id: "global-settings" },
+        { workspaceId: cleanWorkspaceId },
         { $set: { 
           geminiApiKeyHash: state.settings.geminiApiKeyHash || "",
           geminiApiKeyEncrypted: state.settings.geminiApiKeyEncrypted || "",

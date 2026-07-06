@@ -1,18 +1,27 @@
 import { Router } from "express";
+import crypto from "crypto";
 import { getState, verifyPassword, hashPasswordSync, saveState } from "../db/stateManager.js";
 import { createToken } from "../middlewares/auth.js";
 import { Developer } from "../db/models.js";
 
 const router = Router();
 
-// Login and obtain a secure session token
+// Login and obtain a secure session token scoped by workspaceId
 router.post("/login", async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ error: "Username and password are required." });
+  const { workspaceId, username, password } = req.body;
+  if (!workspaceId || !username || !password) {
+    return res.status(400).json({ error: "Workspace ID, Username, and Password are required." });
   }
 
-  const dbState = await getState();
+  const cleanWorkspace = workspaceId.trim().toLowerCase();
+  
+  // Verify workspace existence first
+  const workspaceExists = await Developer.exists({ workspaceId: cleanWorkspace });
+  if (!workspaceExists) {
+    return res.status(404).json({ error: "No such workspace existed." });
+  }
+
+  const dbState = await getState(cleanWorkspace);
   const cleanUser = username.trim().toLowerCase();
   const matchedDev = dbState.developers.find(
     (dev: any) => dev.userId?.toLowerCase() === cleanUser
@@ -30,7 +39,7 @@ router.post("/login", async (req, res) => {
       isValidLogin = true;
       // Invalidate the passcode
       dbState.settings.recoveryPasscodes = dbState.settings.recoveryPasscodes.filter((rp: any) => rp.passcode !== password);
-      await saveState(dbState);
+      await saveState(dbState, cleanWorkspace);
     } else if (verifyPassword(password, matchedDev.password)) {
       isValidLogin = true;
     }
@@ -51,26 +60,40 @@ router.post("/login", async (req, res) => {
     success: true,
     token,
     devId: matchedDev.id,
+    workspaceId: cleanWorkspace,
     dev: sanitizedDev
   });
 });
 
-// First-time Team Head registration — only available when NO developers exist
+// Initialize workspace / Register a new workspace
 router.post("/register", async (req, res) => {
-  const { name, userId, password, email, role } = req.body;
+  const { workspaceId, name, userId, password, email, role } = req.body;
 
-  if (!name || !userId || !password) {
-    return res.status(400).json({ error: "Name, User ID, and Password are required." });
+  if (!workspaceId || !name || !userId || !password) {
+    return res.status(400).json({ error: "Workspace ID, Name, User ID, and Password are required." });
   }
 
-  // Remove restriction so anyone can register
-  const dbState = await getState();
+  const cleanWorkspace = workspaceId.trim().toLowerCase();
+
+  // Check if workspace already exists
+  const workspaceExists = await Developer.exists({ workspaceId: cleanWorkspace });
+  if (workspaceExists) {
+    return res.status(400).json({ error: "Workspace already initialized." });
+  }
 
   const cleanUserId = userId.trim().toLowerCase().replace(/\s+/g, "");
+
+  // Check if username is already taken globally
+  const userExists = await Developer.exists({ userId: cleanUserId });
+  if (userExists) {
+    return res.status(400).json({ error: "Username already taken globally." });
+  }
+
   const hashedPassword = hashPasswordSync(password);
 
   const newDev = {
     id: `dev-${Date.now()}`,
+    workspaceId: cleanWorkspace,
     name: name.trim(),
     avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name.trim())}`,
     email: email?.trim() || `${cleanUserId}@company.com`,
@@ -90,6 +113,17 @@ router.post("/register", async (req, res) => {
   // Save to database
   await Developer.create(newDev);
 
+  // Load state to auto-generate workspace settings
+  const dbState = await getState(cleanWorkspace);
+
+  // Generate Master Recovery Key for Team Head
+  const masterRecoveryKey = crypto.randomBytes(8).toString("hex").toUpperCase();
+  const masterRecoveryKeyHash = hashPasswordSync(masterRecoveryKey);
+  
+  if (!dbState.settings) dbState.settings = {};
+  dbState.settings.masterRecoveryKeyHash = masterRecoveryKeyHash;
+  await saveState(dbState, cleanWorkspace);
+
   // Create session token
   const token = createToken(newDev.id);
 
@@ -100,13 +134,19 @@ router.post("/register", async (req, res) => {
     success: true,
     token,
     devId: newDev.id,
-    dev: sanitizedDev
+    workspaceId: cleanWorkspace,
+    dev: sanitizedDev,
+    masterRecoveryKey
   });
 });
 
-// Public list of developers (passwords and credentials fully stripped for security)
+// Public list of developers (passwords and credentials fully stripped for security, filtered by workspaceId query param)
 router.get("/developers", async (req, res) => {
-  const dbState = await getState();
+  const workspaceId = req.query.workspaceId as string;
+  if (!workspaceId) {
+    return res.json([]);
+  }
+  const dbState = await getState(workspaceId);
   const publicDevs = dbState.developers.map((d: any) => ({
     id: d.id,
     name: d.name,
@@ -118,12 +158,22 @@ router.get("/developers", async (req, res) => {
   res.json(publicDevs);
 });
 
-// Forgot Password Flow - Generate Passcode
+// Forgot Password Flow - Generate Passcode scoped by workspaceId
 router.post("/forgot-password", async (req, res) => {
-  const { userId } = req.body;
-  if (!userId) return res.status(400).json({ error: "User ID is required." });
+  const { workspaceId, userId } = req.body;
+  if (!workspaceId || !userId) {
+    return res.status(400).json({ error: "Workspace ID and User ID are required." });
+  }
 
-  const dbState = await getState();
+  const cleanWorkspace = workspaceId.trim().toLowerCase();
+  
+  // Verify workspace existence first
+  const workspaceExists = await Developer.exists({ workspaceId: cleanWorkspace });
+  if (!workspaceExists) {
+    return res.status(404).json({ error: "No such workspace existed." });
+  }
+
+  const dbState = await getState(cleanWorkspace);
   const cleanUser = userId.trim().toLowerCase();
   const matchedDev = dbState.developers.find(
     (dev: any) => dev.userId?.toLowerCase() === cleanUser
@@ -145,9 +195,55 @@ router.post("/forgot-password", async (req, res) => {
     dbState.settings.recoveryPasscodes = [];
   }
   dbState.settings.recoveryPasscodes.push(newPasscodeEntry);
-  await saveState(dbState);
+  await saveState(dbState, cleanWorkspace);
 
   res.json({ success: true, message: "If the user exists, a passcode has been generated for the Team Head." });
+});
+
+// Recover Team Head account using Master Recovery Key
+router.post("/recover-master", async (req, res) => {
+  const { workspaceId, userId, masterRecoveryKey, newPassword } = req.body;
+  if (!workspaceId || !userId || !masterRecoveryKey || !newPassword) {
+    return res.status(400).json({ error: "All fields are required." });
+  }
+
+  const cleanWorkspace = workspaceId.trim().toLowerCase();
+  const workspaceExists = await Developer.exists({ workspaceId: cleanWorkspace });
+  if (!workspaceExists) {
+    return res.status(404).json({ error: "No such workspace existed." });
+  }
+
+  const dbState = await getState(cleanWorkspace);
+  const cleanUser = userId.trim().toLowerCase();
+  const matchedDev = dbState.developers.find(
+    (dev: any) => dev.userId?.toLowerCase() === cleanUser
+  );
+
+  if (!matchedDev || !matchedDev.isHead) {
+    return res.status(403).json({ error: "Invalid user or not a Team Head." });
+  }
+
+  if (!dbState.settings.masterRecoveryKeyHash || !verifyPassword(masterRecoveryKey, dbState.settings.masterRecoveryKeyHash)) {
+    return res.status(401).json({ error: "Invalid Master Recovery Key." });
+  }
+
+  const newPasswordHash = hashPasswordSync(newPassword);
+
+  // Update in DB
+  await Developer.findOneAndUpdate(
+    { userId: matchedDev.userId },
+    { 
+      password: newPasswordHash,
+      passwordChangedAt: new Date()
+    }
+  );
+
+  // Update in state
+  matchedDev.password = newPasswordHash;
+  matchedDev.passwordChangedAt = new Date().toISOString();
+  await saveState(dbState, cleanWorkspace);
+
+  res.json({ success: true, message: "Password updated successfully." });
 });
 
 export default router;

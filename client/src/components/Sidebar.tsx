@@ -94,6 +94,7 @@ export default function Sidebar({
   const [editGithubToken, setEditGithubToken] = useState("");
   const [editCustomEndpoint, setEditCustomEndpoint] = useState("");
   const [editGeminiKey, setEditGeminiKey] = useState("");
+  const [editAvatar, setEditAvatar] = useState("");
 
   // Toast notifications for Clipboard & Actions
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -113,6 +114,7 @@ export default function Sidebar({
       setEditApiToken(activeDev.personalCredentials?.apiToken || "");
       setEditGithubToken(activeDev.personalCredentials?.githubToken || "");
       setEditCustomEndpoint(activeDev.personalCredentials?.customEndpoint || "");
+      setEditAvatar(activeDev.avatar || "");
     }
     if (settings) {
       setEditGeminiKey(settings.hasGeminiApiKey ? "configured (masked for security)" : "");
@@ -179,6 +181,21 @@ export default function Sidebar({
     showToast(`✓ Member ${newDevObj.name} registered with User ID: ${cleanUserId}!`);
   };
 
+  // Handle avatar file upload (converts to base64 data URL)
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showToast("Please upload a valid image file.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setEditAvatar(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Handle saving teammate self-updates
   const handleSaveSelfEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -190,6 +207,7 @@ export default function Sidebar({
       role: editRole.trim(),
       email: editEmail.trim(),
       password: editPassword.trim(),
+      avatar: editAvatar || activeDev.avatar,
       skills: editSkills.split(",").map(s => s.trim()).filter(Boolean),
       personalCredentials: {
         jiraDomain: editJiraDomain.trim(),
@@ -435,7 +453,7 @@ export default function Sidebar({
             </div>
 
             {profileTab === "claim" ? (
-              <form onSubmit={handleSaveSelfEdit} className="flex flex-col gap-3.5 max-h-[460px] overflow-y-auto pr-1">
+              <form onSubmit={handleSaveSelfEdit} className="flex flex-col gap-3.5 max-h-[520px] overflow-y-auto pr-1">
                 <div className="bg-teal-950/20 border border-teal-900/30 rounded-lg p-3 text-xs text-teal-400 flex items-center justify-between">
                   <div className="leading-snug">
                     <span className="font-bold block text-white">Active Session: {activeDev?.name}</span>
@@ -452,6 +470,63 @@ export default function Sidebar({
                     Logout Session
                   </button>
                 </div>
+
+                {/* ── AVATAR PICKER ── */}
+                {(() => {
+                  const DEFAULT_AVATARS = [
+                    `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=alpha&backgroundColor=0d1117`,
+                    `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=beta&backgroundColor=134e4a`,
+                    `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=gamma&backgroundColor=1c1917`,
+                    `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=delta&backgroundColor=1e1b4b`,
+                    `https://api.dicebear.com/7.x/lorelei/svg?seed=alex`,
+                    `https://api.dicebear.com/7.x/lorelei/svg?seed=morgan`,
+                    `https://api.dicebear.com/7.x/lorelei/svg?seed=jordan`,
+                    `https://api.dicebear.com/7.x/lorelei/svg?seed=riley`,
+                  ];
+                  return (
+                    <div className="bg-[#1A120C]/80 border border-[#3D2E24] rounded-xl p-3 flex flex-col gap-2">
+                      <div className="flex items-center gap-3">
+                        {/* Live avatar preview */}
+                        <div className="relative shrink-0">
+                          <img
+                            src={editAvatar || activeDev?.avatar || DEFAULT_AVATARS[0]}
+                            alt="Preview"
+                            className="w-14 h-14 rounded-full object-cover border-2 border-teal-500 shadow-lg shadow-teal-900/40"
+                          />
+                          <span className="absolute -bottom-1 -right-1 bg-teal-600 text-white text-[7px] font-bold px-1 py-0.5 rounded-full uppercase tracking-wider">Preview</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[9px] font-mono font-bold text-teal-400 uppercase tracking-wider mb-1">Profile Avatar</p>
+                          <p className="text-[9px] text-slate-500 leading-snug">Pick a default or upload your own image.</p>
+                          {/* Upload custom */}
+                          <label className="mt-1.5 inline-flex items-center gap-1.5 cursor-pointer py-1 px-2.5 bg-[#251A13] hover:bg-[#3D2E24] border border-[#3D2E24] hover:border-teal-700 text-slate-300 hover:text-white rounded-lg text-[9px] font-bold transition-all">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                            Upload Photo
+                            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                          </label>
+                        </div>
+                      </div>
+                      {/* Default avatar grid */}
+                      <div className="grid grid-cols-8 gap-1.5 mt-1">
+                        {DEFAULT_AVATARS.map((url, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setEditAvatar(url)}
+                            title={`Default avatar ${i + 1}`}
+                            className={`w-8 h-8 rounded-full overflow-hidden border-2 transition-all hover:scale-110 ${
+                              editAvatar === url
+                                ? "border-teal-400 ring-1 ring-teal-400/60 scale-110"
+                                : "border-[#3D2E24] hover:border-teal-700"
+                            }`}
+                          >
+                            <img src={url} alt={`Avatar ${i + 1}`} className="w-full h-full object-cover bg-[#1C1410]" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="grid grid-cols-2 gap-3 text-left">
                   {/* Left Column: Personal info */}

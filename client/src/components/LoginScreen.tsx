@@ -5,10 +5,11 @@ import { Developer } from "../types";
 
 interface LoginScreenProps {
   developers: any[];
-  onLoginSuccess: (token: string, devId: string, rememberMe: boolean) => void;
+  onLoginSuccess: (token: string, devId: string, rememberMe: boolean, workspaceId: string) => void;
 }
 
 export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenProps) {
+  const [workspaceId, setWorkspaceId] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -16,27 +17,32 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const isFirstTimeSetup = !developers || developers.length === 0;
-
   // Tabs: "enter" | "initialize"
-  const [activeTab, setActiveTab] = useState<"enter" | "initialize">(isFirstTimeSetup ? "initialize" : "enter");
+  const [activeTab, setActiveTab] = useState<"enter" | "initialize">("enter");
   const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [passcode, setPasscode] = useState("");
+
+  // Master Recovery Key states
+  const [masterRecoveryKey, setMasterRecoveryKey] = useState<string | null>(null);
+  const [showMasterKeyModal, setShowMasterKeyModal] = useState(false);
+  const [pendingLoginParams, setPendingLoginParams] = useState<any>(null);
+  const [isTeamHeadRecovery, setIsTeamHeadRecovery] = useState(false);
+  const [recoveryKeyInput, setRecoveryKeyInput] = useState("");
+  const [newPasswordInput, setNewPasswordInput] = useState("");
 
   // Registration fields
   const [regName, setRegName] = useState("");
   const [regUserId, setRegUserId] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regEmail, setRegEmail] = useState("");
-  const [regRole, setRegRole] = useState(isFirstTimeSetup ? "Team Head" : "Engineer");
+  const [regRole, setRegRole] = useState("Team Head");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isFirstTimeSetup) {
-      setError("No workspace exists. Please initialize your workspace first.");
+    if (!workspaceId) {
+      setError("Workspace ID is required.");
       return;
     }
-    
     if (!username) return;
     if (!isForgotPassword && !password) return;
     if (isForgotPassword && !passcode) return;
@@ -46,6 +52,7 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
 
     try {
       const payload = { 
+        workspaceId,
         username, 
         password: isForgotPassword ? passcode : password 
       };
@@ -62,7 +69,7 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
         throw new Error(data.error || "Session authentication failed.");
       }
 
-      onLoginSuccess(data.token, data.devId, rememberMe);
+      onLoginSuccess(data.token, data.devId, rememberMe, data.workspaceId);
     } catch (err: any) {
       console.error("Login Error:", err);
       setError(err.message || "Failed to establish secure session connection.");
@@ -72,6 +79,10 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
   };
 
   const handleForgotPassword = async () => {
+    if (!workspaceId) {
+      setError("Please enter your Workspace ID first.");
+      return;
+    }
     if (!username) {
       setError("Please enter your Developer Username ID first.");
       return;
@@ -82,7 +93,7 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
       const response = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: username })
+        body: JSON.stringify({ workspaceId, userId: username })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to request password reset.");
@@ -97,6 +108,10 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!workspaceId) {
+      setError("Workspace ID is required to initialize workspace.");
+      return;
+    }
     if (!regName || !regUserId || !regPassword) return;
     setError(null);
     setLoading(true);
@@ -106,6 +121,7 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          workspaceId,
           name: regName,
           userId: regUserId,
           password: regPassword,
@@ -120,10 +136,54 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
         throw new Error(data.error || "Registration failed.");
       }
 
-      onLoginSuccess(data.token, data.devId, true);
+      if (data.masterRecoveryKey) {
+        setMasterRecoveryKey(data.masterRecoveryKey);
+        setShowMasterKeyModal(true);
+        setPendingLoginParams([data.token, data.devId, true, data.workspaceId]);
+      } else {
+        onLoginSuccess(data.token, data.devId, true, data.workspaceId);
+      }
     } catch (err: any) {
       console.error("Registration Error:", err);
       setError(err.message || "Failed to create account.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMasterRecovery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!workspaceId || !username || !recoveryKeyInput || !newPasswordInput) {
+      setError("All fields are required.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/auth/recover-master", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId,
+          userId: username,
+          masterRecoveryKey: recoveryKeyInput,
+          newPassword: newPasswordInput
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Master recovery failed.");
+      
+      setSuccessMsg("Password successfully reset! You can now log in with your new password.");
+      setIsTeamHeadRecovery(false);
+      setIsForgotPassword(false);
+      setRecoveryKeyInput("");
+      setNewPasswordInput("");
+      setPassword("");
+    } catch (err: any) {
+      console.error("Recovery Error:", err);
+      setError(err.message || "Failed to recover account.");
     } finally {
       setLoading(false);
     }
@@ -135,6 +195,7 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
     setError(null);
     setActiveTab("enter");
     setIsForgotPassword(false);
+    setIsTeamHeadRecovery(false);
   };
 
   return (
@@ -225,9 +286,7 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
                     </span>
                   </div>
                   <p className="text-[10.5px] text-[#A38F82] leading-relaxed">
-                    {isFirstTimeSetup 
-                      ? "No team exists yet. Register as the Team Head to initialize your workspace." 
-                      : "Create a new account to join this workspace ecosystem."}
+                    Register as the Team Head to initialize a new isolated workspace.
                   </p>
                 </div>
 
@@ -243,6 +302,23 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
                 )}
 
                 <form onSubmit={handleRegister} className="flex flex-col gap-3.5 text-left font-sans">
+                  <div>
+                    <label className="text-[9px] font-mono font-bold text-[#A38F82] uppercase tracking-wider block mb-1.5">
+                      Workspace ID
+                    </label>
+                    <div className="relative">
+                      <Server className="absolute left-3.5 top-3 h-4 w-4 text-[#7A675C]" />
+                      <input
+                        type="text"
+                        required
+                        value={workspaceId}
+                        onChange={(e) => setWorkspaceId(e.target.value.trim().toLowerCase())}
+                        placeholder="e.g. team-alpha"
+                        className="w-full text-xs py-3 pl-10 pr-4 bg-[#1C1410] border border-[#3D2E24] text-white rounded-xl focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30 transition-all font-medium placeholder-slate-700"
+                      />
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-[9px] font-mono font-bold text-[#A38F82] uppercase tracking-wider block mb-1.5">
                       Your Full Name
@@ -326,9 +402,9 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
                       <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     ) : (
                       <>
-                        {isFirstTimeSetup ? <Crown className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                        <Crown className="h-4 w-4" />
                         <span className="uppercase tracking-widest font-bold">
-                          {isFirstTimeSetup ? "Initialize Workspace" : "Register Account"}
+                          Initialize Workspace
                         </span>
                       </>
                     )}
@@ -382,7 +458,24 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
                   </motion.div>
                 )}
 
-                <form onSubmit={handleLogin} className="flex flex-col gap-4 text-left font-sans">
+                <form onSubmit={isTeamHeadRecovery ? handleMasterRecovery : handleLogin} className="flex flex-col gap-4 text-left font-sans">
+                  <div>
+                    <label className="text-[9px] font-mono font-bold text-[#A38F82] uppercase tracking-wider block mb-1.5">
+                      Workspace ID
+                    </label>
+                    <div className="relative">
+                      <Server className="absolute left-3.5 top-3.5 h-4 w-4 text-[#7A675C]" />
+                      <input
+                        type="text"
+                        required
+                        value={workspaceId}
+                        onChange={(e) => setWorkspaceId(e.target.value.trim().toLowerCase())}
+                        placeholder="e.g. team-alpha"
+                        className="w-full text-xs py-3.5 pl-10 pr-4 bg-[#1C1410] border border-[#3D2E24] text-white rounded-xl focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/30 transition-all font-medium placeholder-slate-700"
+                      />
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-[9px] font-mono font-bold text-[#A38F82] uppercase tracking-wider block mb-1.5">
                       Developer Username ID
@@ -400,19 +493,67 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
                     </div>
                   </div>
 
-                  {!isForgotPassword ? (
+                  {isTeamHeadRecovery ? (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+                      <div className="flex justify-between items-center mb-1.5">
+                        <label className="text-[9px] font-mono font-bold text-amber-500 uppercase tracking-wider block flex items-center gap-1">
+                          <Crown className="h-3 w-3" /> Master Recovery
+                        </label>
+                        <button 
+                          type="button" 
+                          onClick={() => { setIsTeamHeadRecovery(false); setSuccessMsg(null); setError(null); }}
+                          className="text-[9px] text-[#A38F82] hover:text-white font-mono transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        <div className="relative">
+                          <KeyRound className="absolute left-3.5 top-3.5 h-4 w-4 text-amber-600" />
+                          <input
+                            type="text"
+                            required
+                            value={recoveryKeyInput}
+                            onChange={(e) => setRecoveryKeyInput(e.target.value)}
+                            placeholder="Enter 16-char Master Key"
+                            className="w-full text-xs py-3.5 pl-10 pr-4 bg-[#1C1410] border border-amber-900/50 text-white rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-all font-medium placeholder-slate-700"
+                          />
+                        </div>
+                        <div className="relative">
+                          <Lock className="absolute left-3.5 top-3.5 h-4 w-4 text-amber-600" />
+                          <input
+                            type="password"
+                            required
+                            value={newPasswordInput}
+                            onChange={(e) => setNewPasswordInput(e.target.value)}
+                            placeholder="New Password"
+                            className="w-full text-xs py-3.5 pl-10 pr-4 bg-[#1C1410] border border-amber-900/50 text-white rounded-xl focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30 transition-all font-medium placeholder-slate-700"
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  ) : !isForgotPassword ? (
                     <div>
                       <div className="flex justify-between items-center mb-1.5">
                         <label className="text-[9px] font-mono font-bold text-[#A38F82] uppercase tracking-wider block">
                           Workspace Password
                         </label>
-                        <button 
-                          type="button" 
-                          onClick={handleForgotPassword}
-                          className="text-[9px] text-teal-500 hover:text-teal-400 font-mono transition-colors"
-                        >
-                          Forgot Password?
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button 
+                            type="button" 
+                            onClick={() => { setIsTeamHeadRecovery(true); setError(null); setSuccessMsg(null); }}
+                            className="text-[9px] text-amber-500 hover:text-amber-400 font-mono transition-colors border-r border-[#3D2E24] pr-2"
+                          >
+                            Team Head Recovery
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={handleForgotPassword}
+                            className="text-[9px] text-teal-500 hover:text-teal-400 font-mono transition-colors"
+                          >
+                            Forgot Password?
+                          </button>
+                        </div>
                       </div>
                       <div className="relative">
                         <KeyRound className="absolute left-3.5 top-3.5 h-4 w-4 text-[#7A675C]" />
@@ -478,57 +619,68 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
                       <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     ) : (
                       <>
-                        <span className="uppercase tracking-widest font-bold">Secure Access Node</span>
-                        <ChevronRight className="h-4 w-4" />
+                        <span className="uppercase tracking-widest font-bold">
+                          {isTeamHeadRecovery ? "Reset Password" : "Secure Access Node"}
+                        </span>
+                        {!isTeamHeadRecovery && <ChevronRight className="h-4 w-4" />}
                       </>
                     )}
                   </button>
                 </form>
 
-                {/* Quick access team roster */}
-                {developers && developers.length > 0 && (
-                  <div className="flex flex-col gap-2.5 pt-4 mt-1 border-t border-[#2C1F18] font-sans">
-                    <span className="text-[9px] font-mono font-bold text-[#7A675C] uppercase tracking-wider flex items-center gap-1">
-                      <Server className="h-3 w-3 text-teal-400" /> Team Members
-                    </span>
-                    <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto pr-1">
-                      {developers.map((dev) => {
-                        const isSelected = username.toLowerCase() === dev.userId?.toLowerCase();
-                        return (
-                          <button
-                            key={dev.id}
-                            type="button"
-                            onClick={() => handleQuickLogin(dev)}
-                            className={`flex items-center gap-2.5 p-2.5 bg-[#17100D] border rounded-xl text-left transition-all group cursor-pointer ${
-                              isSelected 
-                                ? "border-teal-500 ring-1 ring-teal-500/20 bg-[#221712]" 
-                                : "border-[#2D211A] hover:border-[#4A3529] hover:bg-[#1D1411]"
-                            }`}
-                          >
-                            <img
-                              src={dev.avatar}
-                              alt={dev.name}
-                              className="w-8 h-8 rounded-full object-cover border border-[#2D211A] shrink-0"
-                              referrerPolicy="no-referrer"
-                            />
-                            <div className="truncate text-[10px] flex-1">
-                              <span className="font-bold text-white block group-hover:text-teal-400 transition-colors truncate">
-                                {dev.name.split(" ")[0]} {dev.isHead ? "👑" : ""}
-                              </span>
-                              <span className="text-[#A38F82] font-mono text-[8px] uppercase tracking-tight block truncate">
-                                {dev.role}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+
               </motion.div>
             )}
           </AnimatePresence>
         </motion.div>
+
+        {/* Master Recovery Key Modal (Shows only once on registration) */}
+        <AnimatePresence>
+          {showMasterKeyModal && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            >
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                className="bg-[#1C1410] border-2 border-amber-500/50 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative overflow-hidden flex flex-col items-center text-center"
+              >
+                {/* Warning header */}
+                <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center mb-4 border border-amber-500/30">
+                  <AlertCircle className="h-6 w-6 text-amber-500" />
+                </div>
+                
+                <h3 className="text-lg font-black text-white uppercase tracking-wider mb-2">Save Your Master Key</h3>
+                
+                <p className="text-xs text-[#A38F82] mb-4">
+                  As the Team Head, you hold the master controls. If you forget your password, you will be permanently locked out unless you provide this Master Recovery Key. 
+                  <strong className="text-amber-400 block mt-2">Store it securely in a password manager. It will never be shown again.</strong>
+                </p>
+
+                <div className="w-full bg-[#130E0B] border border-[#3D2E24] p-4 rounded-xl mb-6 relative group">
+                  <p className="font-mono text-lg font-black tracking-[0.2em] text-white select-all break-all">
+                    {masterRecoveryKey}
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setShowMasterKeyModal(false);
+                    if (pendingLoginParams) {
+                      onLoginSuccess(pendingLoginParams[0], pendingLoginParams[1], pendingLoginParams[2], pendingLoginParams[3]);
+                    }
+                  }}
+                  className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl transition-all uppercase tracking-widest shadow-lg shadow-amber-900/50"
+                >
+                  I have saved it securely
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Secure Footer Info */}
         <motion.p 
