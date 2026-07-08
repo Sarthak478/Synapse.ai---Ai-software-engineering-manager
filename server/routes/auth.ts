@@ -8,7 +8,7 @@ const router = Router();
 
 // Login and obtain a secure session token scoped by workspaceId
 router.post("/login", async (req, res) => {
-  const { workspaceId, username, password } = req.body;
+  const { workspaceId, username, password, rememberMe } = req.body;
   if (!workspaceId || !username || !password) {
     return res.status(400).json({ error: "Workspace ID, Username, and Password are required." });
   }
@@ -50,7 +50,10 @@ router.post("/login", async (req, res) => {
   }
 
   // Create a secure stateless token
-  const token = createToken(matchedDev.id);
+  const token = createToken(
+    matchedDev.id,
+    rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
+  );
 
   // Return user info WITHOUT exposing their password hash
   const sanitizedDev = { ...matchedDev };

@@ -54,7 +54,8 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
       const payload = { 
         workspaceId,
         username, 
-        password: isForgotPassword ? passcode : password 
+        password: isForgotPassword ? passcode : password,
+        rememberMe
       };
 
       const response = await fetch("/api/auth/login", {
@@ -695,4 +696,3 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
     </div>
   );
 }
-

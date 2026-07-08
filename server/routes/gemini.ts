@@ -2,6 +2,7 @@ import { Router } from "express";
 import { GoogleGenAI } from "@google/genai";
 import { getState, decryptKey } from "../db/stateManager.js";
 import { Developer } from "../db/models.js";
+import { normalizeDatabases } from "./repoAnalysis.js";
 
 const router = Router();
 
@@ -124,6 +125,8 @@ router.post("/analyze-repo", async (req: any, res) => {
   CRITICAL RULES:
   - Base your tech stack strictly on the Real GitHub Data Extracted (if provided), or infer from the description.
   - If package.json dependencies are listed, correctly categorize them (e.g., 'express' -> Node.js Backend, 'react' -> React Frontend, 'mongoose' -> MongoDB).
+  - Do not list MongoDB unless the description or dependencies explicitly mention MongoDB, mongoose, or mongo.
+  - If Redis, ioredis, Bull, or queue/cache dependencies are present, list Redis as cache/message infrastructure in "databases"; do not convert Redis into MongoDB.
   - Do not hallucinate completely unrelated technologies, but do infer the architectural stack based on the provided dependencies and languages.
 
   Analyze and output a JSON schema with the exact format:
@@ -168,6 +171,7 @@ router.post("/analyze-repo", async (req: any, res) => {
     });
 
     const parsedData = JSON.parse(response.text || "{}");
+    parsedData.databases = normalizeDatabases(parsedData.databases || [], description, githubInfo);
     res.json(parsedData);
   } catch (err: any) {
     console.error("Error connected to Gemini AI:", err);

@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { getState, saveState, defaultState, hashPasswordSync, encryptKey } from "../db/stateManager.js";
-import { Developer } from "../db/models.js";
+import { hashGeminiApiKey, hasStoredGeminiApiKey, repairGeminiKeySettings } from "./geminiKeyState.js";
+import { canDeleteDeveloper, canSetHeadPrivilege, hasAtLeastOneHead } from "./teamPermissions.js";
+import { getWorkspaceIdForDev } from "./workspaceAccess.js";
 
 const router = Router();
 
@@ -10,12 +12,6 @@ const CLIENT_SAFE_DEV_FIELDS = [
   "workloadPoints", "velocity", "activeTaskId", "isHead",
   "userId", "contributions", "addedBy", "passwordChangedAt"
 ] as const;
-
-async function getWorkspaceIdForDev(devId: string): Promise<string> {
-  const dev = await Developer.findOne({ id: devId }).lean();
-  if (!dev) throw new Error("Developer not found");
-  return dev.workspaceId;
-}
 
 function buildSafeDevRecord(d: any): any {
   const safe: any = {};
@@ -28,8 +24,9 @@ function buildSafeDevRecord(d: any): any {
 function buildSafeState(dbState: any) {
   const sanitized: any = { ...dbState };
   sanitized.developers = dbState.developers.map(buildSafeDevRecord);
+  sanitized.repositories = Array.isArray(dbState.repositories) ? dbState.repositories : [];
   sanitized.settings = {
-    hasGeminiApiKey: !!dbState.settings?.geminiApiKeyHash,
+    hasGeminiApiKey: hasStoredGeminiApiKey(dbState.settings),
     notifications: dbState.settings?.notifications || [],
     recoveryPasscodes: dbState.settings?.recoveryPasscodes || []
   };
@@ -41,9 +38,10 @@ router.get("/", async (req: any, res: any) => {
   try {
     const workspaceId = await getWorkspaceIdForDev(req.userDevId);
     const dbState = await getState(workspaceId);
+    dbState.settings = repairGeminiKeySettings(dbState.settings);
     res.json(buildSafeState(dbState));
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -58,24 +56,25 @@ router.post("/save", async (req: any, res: any) => {
   try {
     const workspaceId = await getWorkspaceIdForDev(currentDevId);
     const dbState = await getState(workspaceId);
+    dbState.settings = repairGeminiKeySettings(dbState.settings);
 
   // 0. Update settings (only Head can configure Gemini Key)
   if (incomingState.settings) {
     const isHead = dbState.developers.find((d: any) => d.id === currentDevId)?.isHead === true;
-    if (incomingState.settings.geminiApiKeyHash !== undefined) {
-      // Only enforce Team Head restriction if the value is actually being changed
-      const existingHash = dbState.settings.geminiApiKeyHash || "";
-      const incomingHash = (incomingState.settings.geminiApiKeyHash || "").trim();
-      if (incomingHash !== existingHash) {
-        if (!isHead) {
-          return res.status(403).json({ error: "Access Denied: Only a Project Head can configure the team's Gemini API Key." });
-        }
-        dbState.settings.geminiApiKeyHash = incomingHash;
-        // Store the raw key server-side so the Gemini route can use it directly
-        // The client sends it once during save, then forgets it
-        if (incomingState.settings.geminiApiKeyEncrypted !== undefined) {
-          dbState.settings.geminiApiKeyEncrypted = encryptKey(incomingState.settings.geminiApiKeyEncrypted.trim());
-        }
+    if (incomingState.settings.geminiApiKeyEncrypted !== undefined) {
+      if (!isHead) {
+        return res.status(403).json({ error: "Access Denied: Only a Project Head can configure the team's Gemini API Key." });
+      }
+
+      const rawKey = String(incomingState.settings.geminiApiKeyEncrypted || "").trim();
+      const incomingHash = String(incomingState.settings.geminiApiKeyHash || "").trim();
+
+      if (rawKey) {
+        dbState.settings.geminiApiKeyHash = incomingHash || hashGeminiApiKey(rawKey);
+        dbState.settings.geminiApiKeyEncrypted = encryptKey(rawKey);
+      } else {
+        dbState.settings.geminiApiKeyHash = "";
+        dbState.settings.geminiApiKeyEncrypted = "";
       }
     }
     if (incomingState.settings.notifications !== undefined) {
@@ -119,6 +118,13 @@ router.post("/save", async (req: any, res: any) => {
       return res.status(403).json({ error: "Access Denied: Only a Team Head can delete profiles." });
     }
 
+    for (const deletedId of deletedIds) {
+      const permission = canDeleteDeveloper(dbState.developers, currentDevId, deletedId);
+      if (!permission.allowed) {
+        return res.status(403).json({ error: permission.reason });
+      }
+    }
+
     // Process existing developers
     for (const originalDev of dbState.developers) {
       const incomingDev = incomingDevsMap.get(originalDev.id);
@@ -151,6 +157,13 @@ router.post("/save", async (req: any, res: any) => {
       }
       if (incomingDev.contributions) {
         mergedDev.contributions = { ...originalDev.contributions, ...incomingDev.contributions };
+      }
+
+      if (typeof incomingDev.isHead === "boolean" && incomingDev.isHead !== originalDev.isHead) {
+        const permission = canSetHeadPrivilege(dbState.developers, currentDevId, originalDev.id, incomingDev.isHead);
+        if (!permission.allowed) {
+          return res.status(403).json({ error: permission.reason });
+        }
       }
 
       if (isHead && typeof incomingDev.isHead === "boolean") {
@@ -228,6 +241,13 @@ router.post("/save", async (req: any, res: any) => {
     }
 
     dbState.developers = updatedDevs;
+    if (!hasAtLeastOneHead(dbState.developers)) {
+      return res.status(403).json({ error: "A workspace must always have at least one Team Head." });
+    }
+  }
+
+  if (Array.isArray(incomingState.repositories)) {
+    dbState.repositories = incomingState.repositories;
   }
 
     await saveState(dbState, workspaceId);
@@ -235,7 +255,7 @@ router.post("/save", async (req: any, res: any) => {
     // SECURITY FIX #5: Return only whitelisted fields
     res.json({ success: true, state: buildSafeState(dbState) });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -254,6 +274,7 @@ router.post("/reset", async (req: any, res: any) => {
     // Reset clears project settings but preserves developer accounts
     const resetState = {
       developers: dbState.developers, // Keep existing accounts
+      repositories: [],
       settings: { 
         geminiApiKeyHash: "",
         notifications: [],
@@ -265,7 +286,7 @@ router.post("/reset", async (req: any, res: any) => {
     // SECURITY FIX #5: Return only whitelisted fields
     res.json({ success: true, state: buildSafeState(resetState) });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 

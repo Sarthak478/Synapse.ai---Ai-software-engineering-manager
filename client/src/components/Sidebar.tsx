@@ -24,6 +24,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import { Developer } from "../types";
+import { MASKED_GEMINI_KEY } from "../geminiSettings";
 
 interface SidebarProps {
   currentTab: string;
@@ -72,7 +73,7 @@ export default function Sidebar({
   ];
 
   // Dynamic profile states
-  const [profileTab, setProfileTab] = useState<"claim" | "register">("claim"); // "claim" will be "My Session"
+  const [profileTab, setProfileTab] = useState<"claim" | "members" | "register">("claim"); // "claim" will be "My Session"
   
   // Registration state
   const [newName, setNewName] = useState("");
@@ -101,6 +102,7 @@ export default function Sidebar({
 
   const activeDev = developers.find(d => d.id === activeDevId);
   const isHead = activeDev?.isHead === true;
+  const headCount = developers.filter(d => d.isHead).length;
 
   // Sync self-edit states with activeDev profile when modal or dev changes
   useEffect(() => {
@@ -117,7 +119,7 @@ export default function Sidebar({
       setEditAvatar(activeDev.avatar || "");
     }
     if (settings) {
-      setEditGeminiKey(settings.hasGeminiApiKey ? "configured (masked for security)" : "");
+      setEditGeminiKey(settings.hasGeminiApiKey ? MASKED_GEMINI_KEY : "");
     }
   }, [activeDev, settings, showProfileModal]);
 
@@ -217,7 +219,7 @@ export default function Sidebar({
       }
     };
 
-    const keyToSave = editGeminiKey !== "configured (masked for security)" ? editGeminiKey.trim() : undefined;
+    const keyToSave = editGeminiKey !== MASKED_GEMINI_KEY ? editGeminiKey.trim() : undefined;
     
     await onUpdateProfileAndSettings(updatedDevObj, keyToSave);
 
@@ -239,6 +241,37 @@ export default function Sidebar({
       await onRemoveDeveloper(devId);
       showToast(`✓ Profile ${devName} removed.`);
     }
+  };
+
+  const canRemoveMember = (dev: Developer) => {
+    if (!isHead || dev.id === activeDevId) return false;
+    return !dev.isHead || headCount > 1;
+  };
+
+  const canPromoteMember = (dev: Developer) => {
+    return isHead && !dev.isHead;
+  };
+
+  const canRevokeHead = (dev: Developer) => {
+    return isHead && dev.isHead === true && dev.id !== activeDevId && headCount > 1;
+  };
+
+  const handleSetHeadPrivilege = async (dev: Developer, nextIsHead: boolean) => {
+    if (!isHead) {
+      showToast("Only Team Head can change privileges.");
+      return;
+    }
+    if (dev.id === activeDevId && !nextIsHead) {
+      showToast("Head privileges can only be revoked by another Head.");
+      return;
+    }
+    if (dev.isHead && !nextIsHead && headCount <= 1) {
+      showToast("Assign another Head before revoking the last Head.");
+      return;
+    }
+
+    await onUpdateProfileAndSettings({ ...dev, isHead: nextIsHead });
+    showToast(nextIsHead ? `${dev.name} is now a Team Head.` : `${dev.name}'s Head privileges were revoked.`);
   };
 
   return (
@@ -412,7 +445,7 @@ export default function Sidebar({
       {/* Team Profile Claim & Register Modal */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in font-sans">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 text-left border border-slate-200 shadow-2xl flex flex-col gap-4 animate-scale-up dark:bg-[#1A120C] dark:border-[#3D2E24] text-slate-800 dark:text-[#ECE4DE]">
+          <div className="bg-white rounded-xl max-w-3xl w-full p-6 text-left border border-slate-200 shadow-2xl flex flex-col gap-4 animate-scale-up dark:bg-[#1A120C] dark:border-[#3D2E24] text-slate-800 dark:text-[#ECE4DE]">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-[#3D2E24]/50">
               <div>
                 <span className="text-[10px] font-mono font-bold text-teal-600 dark:text-teal-400 uppercase tracking-wider block">TEAM SESSION & SECURITY</span>
@@ -439,6 +472,16 @@ export default function Sidebar({
                 }`}
               >
                 My Profile & API Tokens
+              </button>
+              <button
+                onClick={() => setProfileTab("members")}
+                className={`flex-1 py-2 text-center text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                  profileTab === "members"
+                    ? "border-teal-500 text-teal-600 dark:text-teal-400"
+                    : "border-transparent text-slate-400 hover:text-slate-600 dark:text-[#A38F82]"
+                }`}
+              >
+                Team Members
               </button>
               <button
                 onClick={() => setProfileTab("register")}
@@ -694,6 +737,87 @@ export default function Sidebar({
                   </button>
                 </div>
               </form>
+            ) : profileTab === "members" ? (
+              <div className="flex flex-col gap-3 max-h-[520px] overflow-y-auto pr-1 font-sans">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-[#1A120C]/80 border border-[#3D2E24] rounded-lg p-3">
+                    <span className="block text-[9px] font-mono font-bold text-slate-500 uppercase">Members</span>
+                    <span className="block text-lg font-bold text-white mt-1">{developers.length}</span>
+                  </div>
+                  <div className="bg-[#1A120C]/80 border border-[#3D2E24] rounded-lg p-3">
+                    <span className="block text-[9px] font-mono font-bold text-slate-500 uppercase">Team Heads</span>
+                    <span className="block text-lg font-bold text-amber-300 mt-1">{headCount}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {developers.map((dev) => (
+                    <div key={dev.id} className="bg-[#1A120C]/80 border border-[#3D2E24] rounded-lg p-3 flex flex-col gap-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img
+                            src={dev.avatar}
+                            alt={dev.name}
+                            referrerPolicy="no-referrer"
+                            className={`w-9 h-9 rounded-full object-cover border shrink-0 ${dev.isHead ? "border-amber-400" : "border-teal-700"}`}
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-bold text-white truncate">{dev.name}</span>
+                              {dev.id === activeDevId && (
+                                <span className="text-[8px] font-mono font-black text-teal-300 bg-teal-950/60 border border-teal-900 rounded px-1.5 py-0.5">YOU</span>
+                              )}
+                              {dev.isHead && <Crown className="h-3.5 w-3.5 text-amber-400 shrink-0" />}
+                            </div>
+                            <span className="text-[10px] text-slate-500 font-mono truncate block">{dev.role}</span>
+                          </div>
+                        </div>
+                        <span className={`text-[9px] font-mono font-black uppercase rounded px-2 py-1 border shrink-0 ${
+                          dev.isHead
+                            ? "bg-amber-950/40 text-amber-300 border-amber-900/50"
+                            : "bg-slate-900/40 text-slate-400 border-slate-800"
+                        }`}>
+                          {dev.isHead ? "Head" : "Member"}
+                        </span>
+                      </div>
+
+                      {isHead && (
+                        <div className="flex flex-wrap justify-end gap-2 border-t border-[#3D2E24]/70 pt-2">
+                          {canPromoteMember(dev) && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetHeadPrivilege(dev, true)}
+                              className="px-2.5 py-1.5 bg-amber-950/30 hover:bg-amber-900/40 border border-amber-900/50 text-amber-300 rounded-md text-[10px] font-bold flex items-center gap-1.5"
+                            >
+                              <Crown className="h-3 w-3" />
+                              Promote
+                            </button>
+                          )}
+                          {canRevokeHead(dev) && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetHeadPrivilege(dev, false)}
+                              className="px-2.5 py-1.5 bg-slate-900/40 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-md text-[10px] font-bold"
+                            >
+                              Revoke Head
+                            </button>
+                          )}
+                          {canRemoveMember(dev) && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleRemoveProfile(e, dev.id, dev.name)}
+                              className="px-2.5 py-1.5 bg-red-950/30 hover:bg-red-900/40 border border-red-900/50 text-red-300 rounded-md text-[10px] font-bold flex items-center gap-1.5"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               <form onSubmit={handleRegisterDeveloper} className="flex flex-col gap-3 font-sans">
                 {/* Permissions Warning Block */}

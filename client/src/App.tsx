@@ -12,6 +12,13 @@ import { AppState } from "./types";
 import { RefreshCw, LayoutDashboard, SlidersHorizontal, Info, Sun, Moon } from "lucide-react";
 import { motion } from "motion/react";
 import { defaultProjectData } from "./defaultProjectData";
+import { buildSettingsSavePayload, MASKED_GEMINI_KEY } from "./geminiSettings";
+import {
+  getProjectDataKey as getSharedProjectDataKey,
+  loadLocalProjectData as loadSharedLocalProjectData,
+  saveLocalProjectData as saveSharedLocalProjectData,
+  mergeServerAndLocalState
+} from "./stateSync";
 
 // Helper to cryptographically hash raw api keys (one-way SHA-256) client-side
 async function hashApiKey(key: string): Promise<string> {
@@ -20,49 +27,6 @@ async function hashApiKey(key: string): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
-// Helper to fetch/save project-specific states purely client-side for zero-knowledge compliance
-// DATA ISOLATION: Each user gets their own scoped localStorage key partitioned by workspaceId and devId.
-function getProjectDataKey(workspaceId: string | null, devId: string | null) {
-  if (!workspaceId || !devId) return "";
-  return `synapse-project-data-${workspaceId}-${devId}`;
-}
-
-function loadLocalProjectData(workspaceId: string | null, devId: string | null) {
-  if (!workspaceId || !devId) return { ...defaultProjectData };
-
-  // Purge old global key on first scoped load to prevent data leakage
-  if (localStorage.getItem("synapse-project-data")) {
-    localStorage.removeItem("synapse-project-data");
-  }
-  if (localStorage.getItem("synapse-shared-gemini-key")) {
-    localStorage.removeItem("synapse-shared-gemini-key");
-  }
-
-  const stored = localStorage.getItem(getProjectDataKey(workspaceId, devId));
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch (e) {
-      console.error("Failed to parse stored project data:", e);
-    }
-  }
-  // First login for this user — start with a completely clean slate
-  return { ...defaultProjectData };
-}
-
-function saveLocalProjectData(workspaceId: string | null, devId: string | null, state: any) {
-  if (!workspaceId || !devId) return;
-  const toSave = {
-    repositories: state.repositories || [],
-    tasks: state.tasks || [],
-    codeReviews: state.codeReviews || [],
-    standups: state.standups || [],
-    chats: state.chats || [],
-    sprints: state.sprints || []
-  };
-  localStorage.setItem(getProjectDataKey(workspaceId, devId), JSON.stringify(toSave));
 }
 
 export default function App() {
@@ -153,7 +117,7 @@ export default function App() {
     // Process Gemini Key if provided
     let rawKeyToSend = undefined;
     if (rawGeminiKey !== undefined) {
-      if (rawGeminiKey && rawGeminiKey !== "configured (masked for security)") {
+      if (rawGeminiKey && rawGeminiKey !== MASKED_GEMINI_KEY) {
         const hash = await hashApiKey(rawGeminiKey);
         newState = {
           ...newState,
@@ -232,16 +196,8 @@ export default function App() {
 
       // Load local project state and merge with server state (scoped to this user and workspace)
       const currentDevId = activeDevId;
-      const localProject = loadLocalProjectData(activeWorkspaceId, currentDevId);
-      const merged = {
-        ...data,
-        ...localProject,
-        settings: {
-          ...data.settings,
-          hasGeminiApiKey: data.settings?.hasGeminiApiKey
-        }
-      };
-      setState(merged);
+      const localProject = loadSharedLocalProjectData(activeWorkspaceId, currentDevId);
+      setState(mergeServerAndLocalState(data, localProject));
       setErrorMessage(null);
     } catch (err: any) {
       console.error(err);
@@ -277,7 +233,7 @@ export default function App() {
   // Synchronize state changes to server JSON DB securely
   const handleSaveState = async (updatedState: AppState, rawGeminiKeyToSend?: string) => {
     // 1. Save project-specific fields strictly to local storage (zero-knowledge, user-scoped)
-    saveLocalProjectData(activeWorkspaceId, activeDevId, updatedState);
+    saveSharedLocalProjectData(activeWorkspaceId, activeDevId, updatedState);
 
     // 2. Perform instant optimistic local state update for responsiveness
     setState(updatedState);
@@ -288,16 +244,9 @@ export default function App() {
       // Prepare sanitized body to send to server
       const payload: any = {
         developers: updatedState.developers,
-        settings: {
-          geminiApiKeyHash: updatedState.settings?.geminiApiKeyHash || "",
-          notifications: updatedState.settings?.notifications || [],
-          recoveryPasscodes: updatedState.settings?.recoveryPasscodes || []
-        }
+        repositories: updatedState.repositories,
+        settings: buildSettingsSavePayload(updatedState.settings, rawGeminiKeyToSend)
       };
-
-      if (rawGeminiKeyToSend !== undefined) {
-        payload.settings.geminiApiKeyEncrypted = rawGeminiKeyToSend;
-      }
 
       const response = await fetch("/api/state/save", {
         method: "POST",
@@ -314,16 +263,8 @@ export default function App() {
       if (!response.ok) throw new Error("Could not sync state to server");
       const data = await response.json();
       if (data.state) {
-        const localProject = loadLocalProjectData(activeWorkspaceId, activeDevId);
-        const merged = {
-          ...data.state,
-          ...localProject,
-          settings: {
-            ...data.state.settings,
-            hasGeminiApiKey: data.state.settings?.hasGeminiApiKey
-          }
-        };
-        setState(merged);
+        const localProject = loadSharedLocalProjectData(activeWorkspaceId, activeDevId);
+        setState(mergeServerAndLocalState(data.state, localProject));
       }
     } catch (err) {
       console.error("State synchronization failed:", err);
@@ -340,7 +281,7 @@ export default function App() {
     try {
       // 1. Reset client-side project data for this user
       if (activeDevId) {
-        localStorage.removeItem(getProjectDataKey(activeWorkspaceId, activeDevId));
+        localStorage.removeItem(getSharedProjectDataKey(activeWorkspaceId, activeDevId));
       }
 
       const response = await fetch("/api/state/reset", { 

@@ -74,6 +74,7 @@ function sanitizeDevForDisk(d: any): any {
 
 export const defaultState = {
   developers: [] as any[],
+  repositories: [] as any[],
   settings: {
     geminiApiKeyHash: "",
     notifications: [],
@@ -99,6 +100,7 @@ export async function getState(workspaceId: string = "default-workspace") {
     if (devs.length === 0) {
       return {
         developers: [],
+        repositories: settingsDoc.repositories || [],
         settings: { 
           geminiApiKeyHash: settingsDoc.geminiApiKeyHash,
           geminiApiKeyEncrypted: settingsDoc.geminiApiKeyEncrypted || "",
@@ -137,6 +139,7 @@ export async function getState(workspaceId: string = "default-workspace") {
 
     return {
       developers: parsedDevs,
+      repositories: settingsDoc.repositories || [],
       settings: { 
         geminiApiKeyHash: settingsDoc.geminiApiKeyHash,
         geminiApiKeyEncrypted: settingsDoc.geminiApiKeyEncrypted || "",
@@ -149,6 +152,7 @@ export async function getState(workspaceId: string = "default-workspace") {
     console.error("Error reading database", error);
     return {
       developers: defaultState.developers,
+      repositories: defaultState.repositories,
       settings: defaultState.settings
     };
   }
@@ -182,6 +186,7 @@ export async function saveState(state: any, workspaceId: string = "default-works
         { $set: { 
           geminiApiKeyHash: state.settings.geminiApiKeyHash || "",
           geminiApiKeyEncrypted: state.settings.geminiApiKeyEncrypted || "",
+          repositories: Array.isArray(state.repositories) ? state.repositories : [],
           notifications: state.settings.notifications || [],
           recoveryPasscodes: state.settings.recoveryPasscodes || []
         } },

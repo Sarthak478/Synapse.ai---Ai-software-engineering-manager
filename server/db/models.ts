@@ -37,6 +37,7 @@ const settingsSchema = new mongoose.Schema({
   workspaceId: { type: String, required: true, unique: true },
   geminiApiKeyHash: { type: String, default: "" },
   geminiApiKeyEncrypted: { type: String, default: "" },
+  repositories: { type: Array, default: [] },
   notifications: { type: Array, default: [] },
   recoveryPasscodes: { type: Array, default: [] }
 });

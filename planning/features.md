@@ -8,6 +8,8 @@ The application is an AI-powered Software Engineering Manager dashboard that ass
 ## 2. Repo Intelligence (`RepoIntelligence`)
 - **Endpoint:** `POST /api/gemini/analyze-repo`
 - **Functionality:** Scans a repository and provides a comprehensive software architecture and code analysis (stack, modules, APIs, databases) using Gemini.
+- **Workspace behavior:** Repository connections are workspace-shared. Once one team member links a repo, it appears for the whole team.
+- **Lifecycle controls:** Shared repositories can also be removed from Repo Intelligence to avoid clutter.
 
 ## 3. Sprint Planner (`SprintPlanner`)
 - **Endpoint:** `POST /api/gemini/plan-sprint`
@@ -32,6 +34,26 @@ The application is an AI-powered Software Engineering Manager dashboard that ass
 - **Endpoints:** `POST /api/jira/create-issue`, `POST /api/jira/fetch-issues`
 - **Functionality:** Connects to a Jira workspace to create issues or fetch them. Contains a sandbox mode for simulation if credentials are not configured.
 
-## 9. Authentication & State Sync
+## 9. Architecture Graph (`ArchitectureGraph`)
+- Interactive dependency graph for repositories/services using React Flow.
+- Supports node search, upstream/downstream dependency tracing, and highlighted impact analysis.
+
+## 10. Risk Heatmap (`RiskHeatmap`)
+- 3x3 matrix that ranks sprint tasks and system modules by complexity vs technical debt.
+- Provides remediation guidance for high-risk intersections and can jump back to the sprint board.
+
+## 11. Deployment Pipeline (`DeploymentPipeline`)
+- Simulated CI/CD dashboard showing workflow runs, build stages, historical build timing, and deployment health.
+- Useful for visualizing release cadence and build stability.
+
+## 12. Sprint Retrospective (`SprintRetrospective`)
+- Post-sprint summary that highlights completed work, blocked items, contributor rankings, and action items.
+- Uses task, developer, and code review state to generate retrospective insights.
+
+## 13. Authentication & State Sync
 - Custom token-based authentication.
 - State is merged between client local storage and the server JSON store (`server/db/stateManager.ts`).
+- Shared workspace state includes developer accounts, notifications, Gemini API key presence, and Repo Intelligence repository connections.
+- Per-member browser-local state continues to hold private working context such as tasks, code reviews, standups, chats, and sprint history.
+- Workspace registration, login, forgot-password recovery, and master recovery-key reset flows exist in `server/routes/auth.ts`.
+- Project settings and sensitive fields are sanitized before being exposed to the client or persisted to disk.

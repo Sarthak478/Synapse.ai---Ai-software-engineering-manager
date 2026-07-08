@@ -17,7 +17,8 @@ import {
   Radio,
   FileCode,
   ShieldCheck,
-  Clock
+  Clock,
+  Trash2
 } from "lucide-react";
 import { motion } from "motion/react";
 import ArchitectureGraph from "./ArchitectureGraph";
@@ -41,6 +42,16 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
 
   const activeRepo = state.repositories.find(r => r.id === selectedRepoId);
 
+  useEffect(() => {
+    if (!selectedRepoId && state.repositories[0]) {
+      setSelectedRepoId(state.repositories[0].id);
+      return;
+    }
+    if (selectedRepoId && !state.repositories.some(repo => repo.id === selectedRepoId)) {
+      setSelectedRepoId(state.repositories[0]?.id || "");
+    }
+  }, [selectedRepoId, state.repositories]);
+
   // Webhook synchronized tracking states
   const [isSyncingWebhooks, setIsSyncingWebhooks] = useState<boolean>(false);
   const [syncStage, setSyncStage] = useState<number>(0);
@@ -61,6 +72,17 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
   const handleSyncWebhooks = () => {
     setIsSyncingWebhooks(true);
     setSyncStage(0);
+  };
+
+  const handleRemoveRepo = async (repo: Repository) => {
+    if (!window.confirm(`Remove ${repo.name} from connected codebases?`)) return;
+
+    const updatedRepos = state.repositories.filter(r => r.id !== repo.id);
+    await onSaveState({
+      ...state,
+      repositories: updatedRepos
+    });
+    setSelectedRepoId(updatedRepos[0]?.id || "");
   };
 
   useEffect(() => {
@@ -340,6 +362,13 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                   <span className="text-xs text-slate-400 font-mono block mt-1">{activeRepo.url}</span>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleRemoveRepo(activeRepo)}
+                    className="px-3 py-1.5 border border-red-200 dark:border-red-900/50 rounded-lg text-xs font-semibold text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors flex items-center gap-1.5 cursor-pointer font-sans"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Remove Codebase
+                  </button>
                   <button
                     onClick={() => handleRescanRepo(activeRepo)}
                     disabled={isScanning}

@@ -1,13 +1,19 @@
 import crypto from "crypto";
 
-// Use a persistent JWT secret or fallback to a randomly generated one for stateless session validation
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString("hex");
+const DEFAULT_SESSION_MS = 24 * 60 * 60 * 1000;
+const STABLE_FALLBACK_SECRET = crypto
+  .createHash("sha256")
+  .update(String(process.env.MONGODB_URI || "synapse-dev-session-secret"))
+  .digest("hex");
+
+// Use a persistent JWT secret, or a deterministic development fallback so refreshes survive server restarts.
+const JWT_SECRET = process.env.JWT_SECRET || STABLE_FALLBACK_SECRET;
 
 /**
  * Create a secure stateless JWT token containing developer ID and expiry timestamp
  */
-export function createToken(devId: string): string {
-  const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours expiry
+export function createToken(devId: string, expiresInMs: number = DEFAULT_SESSION_MS): string {
+  const expiresAt = Date.now() + expiresInMs;
   const payload = `${devId}:${expiresAt}`;
   const signature = crypto.createHmac("sha256", JWT_SECRET).update(payload).digest("hex");
   return `${payload}:${signature}`;
