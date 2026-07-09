@@ -11,6 +11,7 @@ export interface Developer {
   isHead?: boolean; // True if this developer is the Team Head / Administrator with special permissions
   userId?: string;  // Custom user login identifier (cannot be changed after creation)
   password?: string; // Custom login password (changeable by user)
+  passwordChangedAt?: string | null;
   personalCredentials?: {
     jiraDomain?: string;
     apiToken?: string;
@@ -47,6 +48,7 @@ export interface Repository {
   modules?: {
     name: string;
     type: string;
+    description?: string;
     deps: string[];
   }[];
   apis?: {
@@ -144,6 +146,17 @@ export interface AppState {
   sprints: Sprint[];
   settings?: {
     hasGeminiApiKey?: boolean;
+    notifications?: {
+      id: string;
+      message: string;
+      createdAt?: string;
+      readBy: string[];
+    }[];
+    recoveryPasscodes?: {
+      userId: string;
+      passcode: string;
+      expiresAt: number;
+    }[];
   };
   jiraConfig?: {
     domain: string;

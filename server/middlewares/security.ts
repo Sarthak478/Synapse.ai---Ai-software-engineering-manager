@@ -35,6 +35,16 @@ export function securityMiddleware(req: any, res: any, next: any) {
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("X-XSS-Protection", "1; mode=block");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
+    );
+  }
 
   if (req.body) {
     req.body = sanitizeInput(req.body);
@@ -44,6 +54,40 @@ export function securityMiddleware(req: any, res: any, next: any) {
   }
   next();
 }
+
+export function createRateLimiter(options: { windowMs: number; maxRequests: number }) {
+  const hits = new Map<string, { count: number; resetAt: number }>();
+
+  return function rateLimit(req: any, res: any, next: any) {
+    const now = Date.now();
+    const key = req.ip || req.headers?.["x-forwarded-for"] || req.socket?.remoteAddress || "unknown";
+    const current = hits.get(key);
+
+    if (!current || current.resetAt <= now) {
+      hits.set(key, { count: 1, resetAt: now + options.windowMs });
+      next();
+      return;
+    }
+
+    if (current.count >= options.maxRequests) {
+      res.status(429).json({ error: "Too many requests. Please wait and try again." });
+      return;
+    }
+
+    current.count += 1;
+    next();
+  };
+}
+
+export const authRateLimit = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: 30
+});
+
+export const aiRateLimit = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 20
+});
 
 /**
  * Global application error boundary

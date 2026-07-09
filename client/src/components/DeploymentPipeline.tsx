@@ -149,7 +149,7 @@ export default function DeploymentPipeline() {
   };
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setInterval>;
     if (isRunningBuild) {
       timer = setInterval(() => {
         setBuildStage((prev) => {

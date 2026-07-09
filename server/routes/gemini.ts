@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { getState, decryptKey } from "../db/stateManager.js";
 import { Developer } from "../db/models.js";
 import { normalizeDatabases } from "./repoAnalysis.js";
+import { getWorkspaceIdForDev } from "./workspaceAccess.js";
 
 const router = Router();
 
@@ -67,7 +68,8 @@ router.use(async (req: any, res, next) => {
 
 // Helper to construct secure request-specific project context state dynamically
 const getContextState = async (req: any) => {
-  const dbState = await getState();
+  const workspaceId = await getWorkspaceIdForDev(req.userDevId);
+  const dbState = await getState(workspaceId);
   const incomingState = req.body.state || {};
   return {
     developers: dbState.developers || incomingState.developers || [],

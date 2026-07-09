@@ -1,5 +1,7 @@
 import { Router } from "express";
+import crypto from "crypto";
 import { getState, saveState, defaultState, hashPasswordSync, encryptKey } from "../db/stateManager.js";
+import { Developer } from "../db/models.js";
 import { hashGeminiApiKey, hasStoredGeminiApiKey, repairGeminiKeySettings } from "./geminiKeyState.js";
 import { canDeleteDeveloper, canSetHeadPrivilege, hasAtLeastOneHead } from "./teamPermissions.js";
 import { getWorkspaceIdForDev } from "./workspaceAccess.js";
@@ -202,8 +204,8 @@ router.post("/save", async (req: any, res: any) => {
           return res.status(400).json({ error: `User ID '${cleanUserId}' is already taken.` });
         }
 
-        // SECURITY FIX #1: Always hash the default password before storing new developers
-        const rawPassword = incomingDev.password || "changeme";
+        // Always hash the provided password. If legacy clients omit one, create an unguessable reset-only password.
+        const rawPassword = incomingDev.password || crypto.randomBytes(24).toString("base64url");
 
         updatedDevs.push({
           id: incomingDev.id,

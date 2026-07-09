@@ -5,7 +5,35 @@ import { connectDB } from "./connection.js";
 
 const BCRYPT_SALT_ROUNDS = 10;
 const ALGORITHM = "aes-256-gcm";
-const SECRET_KEY = crypto.createHash('sha256').update(String(process.env.MONGODB_URI || "fallback-dev-secret-key")).digest('base64').substring(0, 32);
+
+export interface SettingsState {
+  geminiApiKeyHash: string;
+  geminiApiKeyEncrypted?: string;
+  masterRecoveryKeyHash?: string;
+  notifications: any[];
+  recoveryPasscodes: any[];
+}
+
+export interface DatabaseState {
+  developers: any[];
+  repositories: any[];
+  settings: SettingsState;
+}
+
+export function resolveEncryptionSecret(env: NodeJS.ProcessEnv = process.env): string {
+  const explicitSecret = env.DATA_ENCRYPTION_SECRET || env.JWT_SECRET;
+  if (explicitSecret && explicitSecret.length >= 32) {
+    return explicitSecret;
+  }
+
+  if (env.NODE_ENV === "production") {
+    throw new Error("DATA_ENCRYPTION_SECRET or JWT_SECRET must be set to at least 32 characters in production.");
+  }
+
+  return String(env.MONGODB_URI || "fallback-dev-secret-key");
+}
+
+const SECRET_KEY = crypto.createHash("sha256").update(resolveEncryptionSecret()).digest("base64").substring(0, 32);
 
 export function encryptKey(text: string): string {
   if (!text) return "";
@@ -72,11 +100,13 @@ function sanitizeDevForDisk(d: any): any {
   return safe;
 }
 
-export const defaultState = {
+export const defaultState: DatabaseState = {
   developers: [] as any[],
   repositories: [] as any[],
   settings: {
     geminiApiKeyHash: "",
+    geminiApiKeyEncrypted: "",
+    masterRecoveryKeyHash: "",
     notifications: [],
     recoveryPasscodes: []
   }
@@ -104,6 +134,7 @@ export async function getState(workspaceId: string = "default-workspace") {
         settings: { 
           geminiApiKeyHash: settingsDoc.geminiApiKeyHash,
           geminiApiKeyEncrypted: settingsDoc.geminiApiKeyEncrypted || "",
+          masterRecoveryKeyHash: settingsDoc.masterRecoveryKeyHash || "",
           notifications: settingsDoc.notifications || [],
           recoveryPasscodes: settingsDoc.recoveryPasscodes || []
         }
@@ -118,7 +149,7 @@ export async function getState(workspaceId: string = "default-workspace") {
         docUpdated = true;
       }
       if (!d.password) {
-        d.password = hashPasswordSync("changeme");
+        d.password = hashPasswordSync(crypto.randomBytes(24).toString("base64url"));
         docUpdated = true;
       }
       // SECURITY FIX #1: Auto-migrate any un-hashed plain-text password to bcrypt
@@ -143,6 +174,7 @@ export async function getState(workspaceId: string = "default-workspace") {
       settings: { 
         geminiApiKeyHash: settingsDoc.geminiApiKeyHash,
         geminiApiKeyEncrypted: settingsDoc.geminiApiKeyEncrypted || "",
+        masterRecoveryKeyHash: settingsDoc.masterRecoveryKeyHash || "",
         notifications: settingsDoc.notifications || [],
         recoveryPasscodes: settingsDoc.recoveryPasscodes || []
       }
@@ -186,6 +218,7 @@ export async function saveState(state: any, workspaceId: string = "default-works
         { $set: { 
           geminiApiKeyHash: state.settings.geminiApiKeyHash || "",
           geminiApiKeyEncrypted: state.settings.geminiApiKeyEncrypted || "",
+          masterRecoveryKeyHash: state.settings.masterRecoveryKeyHash || "",
           repositories: Array.isArray(state.repositories) ? state.repositories : [],
           notifications: state.settings.notifications || [],
           recoveryPasscodes: state.settings.recoveryPasscodes || []

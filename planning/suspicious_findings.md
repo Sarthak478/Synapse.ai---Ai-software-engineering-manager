@@ -13,13 +13,13 @@ During the initial project scan, the following suspicious or potentially insecur
 ## 2. Hardcoded Credentials / Information Disclosure
 - **Location:** `server/routes/auth.ts` line ~22
 - **Status:** TESTING PHASE ACCEPTED RISK - Kept as inline code comment reminder.
-- **Details:** Login error message hints at demo credentials (`alice` / `password123`).
+- **Details:** Resolved. Login errors no longer hint at demo credentials.
 - **Action Required Before Production:** Remove the hint from the error message and implement a proper onboarding flow for new developers.
 
 ## 3. Client-Side API Key Header Trust - FIXED
 - **Status:** Fixed in `server/routes/gemini.ts`
 - **Fix Applied:**
-  - A `isValidGeminiKeyFormat()` validator rejects any `x-gemini-api-key` header that doesn't start with `AIza` or is shorter than 35 characters.
+  - The Gemini proxy ignores client-supplied API key headers and only uses a valid environment key or encrypted server-side workspace key.
   - Malformed/invalid keys are silently discarded; the server falls back to the `.env` key only.
   - On the **client side**, all 5 AI feature components now gate their triggers behind `state.settings.hasGeminiApiKey`. If no key is configured, an `ApiKeyRequiredModal.tsx` appears prompting the user to go to Settings.
 

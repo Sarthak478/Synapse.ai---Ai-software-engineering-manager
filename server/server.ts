@@ -1,10 +1,9 @@
 import express from "express";
-import path from "path";
 import dotenv from "dotenv";
 import cors from "cors";
 
 // Import Custom Middlewares
-import { securityMiddleware, errorBoundary } from "./middlewares/security.js";
+import { securityMiddleware, errorBoundary, authRateLimit, aiRateLimit } from "./middlewares/security.js";
 import { authenticateToken } from "./middlewares/auth.js";
 import { connectDB } from "./db/connection.js";
 
@@ -13,29 +12,30 @@ import authRouter from "./routes/auth.js";
 import stateRouter from "./routes/state.js";
 import jiraRouter from "./routes/jira.js";
 import geminiRouter from "./routes/gemini.js";
+import { buildCorsOptions, parsePort } from "./config.js";
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = parsePort(process.env.PORT, 3001);
 
 // 1. Core Request Parsers
 app.use(express.json({ limit: "20mb" }));
 
-// Enable CORS for frontend integration
-app.use(cors());
+// Enable CORS for frontend integration with production allowlisting.
+app.use(cors(buildCorsOptions(process.env)));
 
 // 2. Security Filtering & Custom headers
 app.use(securityMiddleware);
 
 // 3. API Route Registration
 // Public Authentication endpoints
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authRateLimit, authRouter);
 
 // Token-Protected API Routes
 app.use("/api/state", authenticateToken, stateRouter);
 app.use("/api/jira", authenticateToken, jiraRouter);
-app.use("/api/gemini", authenticateToken, geminiRouter);
+app.use("/api/gemini", authenticateToken, aiRateLimit, geminiRouter);
 
 // Standard healthcheck endpoint
 app.get("/api/health", (req, res) => {

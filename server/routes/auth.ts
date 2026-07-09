@@ -123,7 +123,6 @@ router.post("/register", async (req, res) => {
   const masterRecoveryKey = crypto.randomBytes(8).toString("hex").toUpperCase();
   const masterRecoveryKeyHash = hashPasswordSync(masterRecoveryKey);
   
-  if (!dbState.settings) dbState.settings = {};
   dbState.settings.masterRecoveryKeyHash = masterRecoveryKeyHash;
   await saveState(dbState, cleanWorkspace);
 

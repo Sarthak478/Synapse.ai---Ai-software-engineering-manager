@@ -1,13 +1,34 @@
 import crypto from "crypto";
 
 const DEFAULT_SESSION_MS = 24 * 60 * 60 * 1000;
-const STABLE_FALLBACK_SECRET = crypto
-  .createHash("sha256")
-  .update(String(process.env.MONGODB_URI || "synapse-dev-session-secret"))
-  .digest("hex");
 
-// Use a persistent JWT secret, or a deterministic development fallback so refreshes survive server restarts.
-const JWT_SECRET = process.env.JWT_SECRET || STABLE_FALLBACK_SECRET;
+export function resolveJwtSecret(env: NodeJS.ProcessEnv = process.env): string {
+  if (env.JWT_SECRET && env.JWT_SECRET.length >= 32) {
+    return env.JWT_SECRET;
+  }
+
+  if (env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET must be set to at least 32 characters in production.");
+  }
+
+  return crypto
+    .createHash("sha256")
+    .update(String(env.MONGODB_URI || "synapse-dev-session-secret"))
+    .digest("hex");
+}
+
+const JWT_SECRET = resolveJwtSecret();
+
+function signaturesMatch(received: string, expected: string): boolean {
+  const receivedBuffer = Buffer.from(received, "hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+
+  if (receivedBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
+}
 
 /**
  * Create a secure stateless JWT token containing developer ID and expiry timestamp
@@ -19,10 +40,7 @@ export function createToken(devId: string, expiresInMs: number = DEFAULT_SESSION
   return `${payload}:${signature}`;
 }
 
-/**
- * Verify session token cryptographically and return the matching developer ID
- */
-export function verifyToken(token: string): string | null {
+export function verifyTokenWithSecret(token: string, secret: string): string | null {
   if (!token) return null;
   try {
     const parts = token.split(":");
@@ -31,13 +49,20 @@ export function verifyToken(token: string): string | null {
     const expiresAt = parseInt(expiresAtStr, 10);
     if (isNaN(expiresAt) || Date.now() > expiresAt) return null;
 
-    const expectedSignature = crypto.createHmac("sha256", JWT_SECRET).update(`${devId}:${expiresAt}`).digest("hex");
-    if (signature !== expectedSignature) return null;
+    const expectedSignature = crypto.createHmac("sha256", secret).update(`${devId}:${expiresAt}`).digest("hex");
+    if (!signaturesMatch(signature, expectedSignature)) return null;
 
     return devId;
   } catch (e) {
     return null;
   }
+}
+
+/**
+ * Verify session token cryptographically and return the matching developer ID
+ */
+export function verifyToken(token: string): string | null {
+  return verifyTokenWithSecret(token, JWT_SECRET);
 }
 
 /**
