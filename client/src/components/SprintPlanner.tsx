@@ -463,9 +463,13 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
       });
 
       setRequirementsPrompt("");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Failed compiling sprint planning proposal. Running automated agile allocations fallback.");
+      if (err.message && err.message.toLowerCase().includes("api key")) {
+        setShowApiKeyModal(true);
+      } else {
+        alert("Failed compiling sprint planning proposal. Running automated agile allocations fallback.");
+      }
     } finally {
       setIsPlanning(false);
     }

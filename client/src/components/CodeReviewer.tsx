@@ -153,9 +153,13 @@ export default function TimerWidget() {
 
       setActiveReview(newReview);
       setActiveTab("analysis");
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("AI Review Engine temporarily offline. Loading local secure rules optimizer.");
+      if (err.message && err.message.toLowerCase().includes("api key")) {
+        setShowApiKeyModal(true);
+      } else {
+        alert("AI Review Engine temporarily offline. Loading local secure rules optimizer.");
+      }
     } finally {
       setIsAuditing(false);
     }

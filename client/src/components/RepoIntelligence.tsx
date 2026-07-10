@@ -175,7 +175,11 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
       setNewRepoDesc("");
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed connecting to repo analysis engine.");
+      if (err.message && err.message.toLowerCase().includes("api key")) {
+        setShowApiKeyModal(true);
+      } else {
+        alert(err.message || "Failed connecting to repo analysis engine.");
+      }
     } finally {
       setIsScanning(false);
     }
@@ -232,8 +236,11 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
         ...state,
         repositories: updatedRepos
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      if (err.message && err.message.toLowerCase().includes("api key")) {
+        setShowApiKeyModal(true);
+      }
     } finally {
       setIsScanning(false);
     }
@@ -273,10 +280,10 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                     SCANNED
                   </span>
                 ) : (
-                  <span className="text-[9px] font-mono bg-slate-100 text-slate-400 px-2 py-0.5 rounded">UNSCANNED</span>
+                  <span className="text-[9px] font-mono bg-slate-100 dark:bg-[#251A13] text-slate-400 dark:text-slate-500 px-2 py-0.5 rounded">UNSCANNED</span>
                 )}
               </div>
-              <span className="text-[10px] font-mono text-slate-500 truncate mt-1">{r.url}</span>
+              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 truncate mt-1">{r.url}</span>
             </button>
           ))}
         </div>
@@ -288,11 +295,11 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
           <PlusCircle className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
           <h3 className="font-sans font-bold text-slate-950 dark:text-[#ECE4DE] text-sm">Add GitHub Repository</h3>
         </div>
-        <p className="text-xs text-slate-500 mb-4 leading-relaxed font-sans">Connect a public URL or codebase structure description to initiate an AI stacking analysis and dependency mapping.</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed font-sans">Connect a public URL or codebase structure description to initiate an AI stacking analysis and dependency mapping.</p>
 
         <form onSubmit={handleConnectRepo} className="flex flex-col gap-3 font-sans">
           <div>
-            <label className="block text-[10px] uppercase font-mono font-bold text-slate-400 mb-1">Repo Name</label>
+            <label className="block text-[10px] uppercase font-mono font-bold text-slate-400 dark:text-slate-500 mb-1">Repo Name</label>
             <input
               type="text"
               value={newRepoName}
@@ -303,7 +310,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase font-mono font-bold text-slate-400 mb-1 font-sans">GitHub Clone URL</label>
+            <label className="block text-[10px] uppercase font-mono font-bold text-slate-400 dark:text-slate-500 mb-1 font-sans">GitHub Clone URL</label>
             <input
               type="url"
               value={newRepoUrl}
@@ -314,7 +321,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
             />
           </div>
           <div>
-            <label className="block text-[10px] uppercase font-mono font-bold text-slate-400 mb-1 font-sans font-sans">Brief Description ($ specs)</label>
+            <label className="block text-[10px] uppercase font-mono font-bold text-slate-400 dark:text-slate-500 mb-1 font-sans font-sans">Brief Description ($ specs)</label>
             <textarea
               value={newRepoDesc}
               onChange={e => setNewRepoDesc(e.target.value)}
@@ -326,7 +333,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
           <button
             type="submit"
             disabled={isScanning}
-            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-slate-100 text-white duration-150 rounded-lg font-bold text-xs tracking-tight shadow-sm flex items-center justify-center gap-1.5 cursor-pointer font-sans"
+            className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:bg-slate-100 disabled:dark:bg-[#251A13] text-white disabled:text-slate-400 disabled:dark:text-slate-600 duration-150 rounded-lg font-bold text-xs tracking-tight shadow-sm flex items-center justify-center gap-1.5 cursor-pointer font-sans"
           >
             {isScanning ? (
               <>
@@ -359,7 +366,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                     </span>
                     <h2 className="text-lg font-bold text-slate-900 dark:text-[#ECE4DE] tracking-tight">{activeRepo.name}</h2>
                   </div>
-                  <span className="text-xs text-slate-400 font-mono block mt-1">{activeRepo.url}</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 font-mono block mt-1">{activeRepo.url}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -392,7 +399,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                       </span>
                     ))}
                     {(!activeRepo.stack || activeRepo.stack.length === 0) && (
-                      <span className="text-xs text-slate-400">None detected</span>
+                      <span className="text-xs text-slate-400 dark:text-slate-500">None detected</span>
                     )}
                   </div>
                 </div>
@@ -420,7 +427,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                     <Radio className="h-4 w-4 text-emerald-500 animate-pulse" />
                     GitHub Webhooks & Active Sync State
                   </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
                     Connect repository events via custom webhook listeners. Triggers real-time commits, issues, and PR alerts.
                   </p>
                 </div>
@@ -428,7 +435,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                   <button
                     onClick={handleSyncWebhooks}
                     disabled={isSyncingWebhooks}
-                    className="w-full sm:w-auto px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-150 disabled:text-slate-400 text-white font-bold text-xs rounded-lg shadow-2xs transition-all duration-155 flex items-center justify-center gap-2 cursor-pointer select-none font-sans"
+                    className="w-full sm:w-auto px-4 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 disabled:bg-slate-150 disabled:dark:bg-slate-900 disabled:text-slate-400 disabled:dark:text-slate-600 text-white font-bold text-xs rounded-lg shadow-2xs transition-all duration-155 flex items-center justify-center gap-2 cursor-pointer select-none font-sans"
                   >
                     {isSyncingWebhooks ? (
                       <>
@@ -470,7 +477,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                             <span className="h-3.5 w-3.5 rounded-full bg-slate-100 dark:bg-[#251A13] border border-slate-200 dark:border-[#3D2E24] inline-block shrink-0"></span>
                           )}
                           <span className={`font-medium ${
-                            isDone ? "text-slate-550 dark:text-slate-500 line-through font-normal" : isCurrent ? "text-slate-900 dark:text-[#ECE4DE] font-bold" : "text-slate-400"
+                            isDone ? "text-slate-550 dark:text-slate-500 line-through font-normal" : isCurrent ? "text-slate-900 dark:text-[#ECE4DE] font-bold" : "text-slate-400 dark:text-slate-500"
                           }`}>
                             {step}
                           </span>
@@ -484,11 +491,11 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
               {/* Active Webhook Status Grid & Details */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50/50 dark:bg-[#251A13] p-4 rounded-lg border border-slate-150 dark:border-[#3D2E24] font-sans">
                 <div className="bg-white dark:bg-[#1C1410] p-3.5 rounded-lg border border-slate-150/85 dark:border-[#3D2E24]">
-                  <span className="block text-[8px] font-mono text-slate-400 font-extrabold uppercase leading-none">WEBHOOK ENDPOINT</span>
+                  <span className="block text-[8px] font-mono text-slate-400 dark:text-slate-500 font-extrabold uppercase leading-none">WEBHOOK ENDPOINT</span>
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200 tracking-tight block mt-1.5 truncate">
                     https://api.pma-copilot.com/webhooks/github
                   </span>
-                  <span className="text-[10px] font-mono text-slate-400 mt-1 block">SSL Handshake Active</span>
+                  <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 mt-1 block">SSL Handshake Active</span>
                 </div>
                 <div className="bg-white dark:bg-[#1C1410] p-3.5 rounded-lg border border-slate-150/85 dark:border-[#3D2E24]">
                   <span className="block text-[8px] font-mono text-slate-400 font-extrabold uppercase leading-none">ACTIVE EVENTS</span>

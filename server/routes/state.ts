@@ -243,7 +243,7 @@ router.post("/save", async (req: any, res: any) => {
           id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
           message: `${incomingDev.name} joined for ${incomingDev.role} role by ${headName}`,
           createdAt: new Date(),
-          readBy: [incomingDev.id]
+          readBy: [incomingDev.id, currentDevId]
         });
       }
     }
