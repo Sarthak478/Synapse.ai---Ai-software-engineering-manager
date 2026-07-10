@@ -248,7 +248,7 @@ router.post("/save", async (req: any, res: any) => {
     }
   }
 
-  if (Array.isArray(incomingState.repositories)) {
+  if (incomingState.repositories !== undefined) {
     dbState.repositories = incomingState.repositories;
   }
 

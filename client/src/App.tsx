@@ -242,11 +242,17 @@ export default function App() {
     setIsSyncing(true);
     try {
       // Prepare sanitized body to send to server
+      // Only include repositories when they were explicitly changed to avoid
+      // overwriting shared workspace repos with stale local data.
       const payload: any = {
         developers: updatedState.developers,
-        repositories: updatedState.repositories,
         settings: buildSettingsSavePayload(updatedState.settings, rawGeminiKeyToSend)
       };
+
+      // Compare repo arrays by reference — if the caller built a new array, repos changed
+      if (state && updatedState.repositories !== state.repositories) {
+        payload.repositories = updatedState.repositories;
+      }
 
       const response = await fetch("/api/state/save", {
         method: "POST",

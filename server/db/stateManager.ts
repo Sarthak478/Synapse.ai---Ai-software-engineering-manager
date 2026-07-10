@@ -35,6 +35,19 @@ export function resolveEncryptionSecret(env: NodeJS.ProcessEnv = process.env): s
 
 const SECRET_KEY = crypto.createHash("sha256").update(resolveEncryptionSecret()).digest("base64").substring(0, 32);
 
+// Startup diagnostic: log which encryption secret source is active
+(() => {
+  const env = process.env;
+  const source = (env.DATA_ENCRYPTION_SECRET && env.DATA_ENCRYPTION_SECRET.length >= 32)
+    ? "DATA_ENCRYPTION_SECRET"
+    : (env.JWT_SECRET && env.JWT_SECRET.length >= 32)
+      ? "JWT_SECRET"
+      : env.NODE_ENV === "production"
+        ? "ERROR (none set!)"
+        : "MONGODB_URI fallback (dev only)";
+  console.log(`[Encryption] Secret source: ${source}`);
+})();
+
 export function encryptKey(text: string): string {
   if (!text) return "";
   const iv = crypto.randomBytes(12);
