@@ -41,7 +41,9 @@ router.get("/", async (req: any, res: any) => {
     const workspaceId = await getWorkspaceIdForDev(req.userDevId);
     const dbState = await getState(workspaceId);
     dbState.settings = repairGeminiKeySettings(dbState.settings);
-    res.json(buildSafeState(dbState));
+    const safeState = buildSafeState(dbState);
+    console.log(`[State GET] hasGeminiApiKey=${safeState.settings.hasGeminiApiKey}, hash=${(dbState.settings.geminiApiKeyHash || "").substring(0, 8)}..., encLen=${(dbState.settings.geminiApiKeyEncrypted || "").length}`);
+    res.json(safeState);
   } catch (err: any) {
     res.status(err.status || 500).json({ error: err.message });
   }
@@ -71,12 +73,16 @@ router.post("/save", async (req: any, res: any) => {
       const rawKey = String(incomingState.settings.geminiApiKeyEncrypted || "").trim();
       const incomingHash = String(incomingState.settings.geminiApiKeyHash || "").trim();
 
+      console.log(`[State SAVE] Gemini key update: rawKeyLen=${rawKey.length}, incomingHash=${incomingHash.substring(0, 8)}...`);
+
       if (rawKey) {
         dbState.settings.geminiApiKeyHash = incomingHash || hashGeminiApiKey(rawKey);
         dbState.settings.geminiApiKeyEncrypted = encryptKey(rawKey);
+        console.log(`[State SAVE] Key encrypted OK: hash=${dbState.settings.geminiApiKeyHash.substring(0, 8)}..., encLen=${dbState.settings.geminiApiKeyEncrypted.length}`);
       } else {
         dbState.settings.geminiApiKeyHash = "";
         dbState.settings.geminiApiKeyEncrypted = "";
+        console.log(`[State SAVE] Key CLEARED (empty raw key received)`);
       }
     }
     if (incomingState.settings.notifications !== undefined) {

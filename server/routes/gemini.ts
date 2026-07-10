@@ -41,15 +41,21 @@ router.use(async (req: any, res, next) => {
       if (dev) {
         const dbState = await getState(dev.workspaceId);
         const rawEncryptedKey = dbState.settings?.geminiApiKeyEncrypted || "";
+        console.log(`[Gemini] DB key lookup: workspace=${dev.workspaceId}, encLen=${rawEncryptedKey.length}, hash=${(dbState.settings?.geminiApiKeyHash || "").substring(0, 8)}...`);
         const dbKey = decryptKey(rawEncryptedKey);
+        console.log(`[Gemini] Decrypted key: len=${dbKey.length}, valid=${dbKey ? isValidGeminiKeyFormat(dbKey) : false}`);
         if (dbKey && isValidGeminiKeyFormat(dbKey)) {
           resolvedKey = dbKey.trim();
         }
+      } else {
+        console.log(`[Gemini] No developer found for id: ${req.userDevId}`);
       }
     } catch (e) {
       console.error("[Gemini] Failed to read API key from DB:", e);
     }
   }
+
+  console.log(`[Gemini] Key resolved: ${resolvedKey ? "YES" : "NO"}`);
 
   if (resolvedKey) {
     req.ai = new GoogleGenAI({
