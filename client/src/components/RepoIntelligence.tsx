@@ -357,8 +357,8 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
           <>
             {/* Repository Info & Stack Detection */}
             <div className="bg-white dark:bg-[#1A120C] p-6 rounded-lg border border-slate-200/50 dark:border-[#3D2E24] shadow-xs text-left">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-[#3D2E24] pb-4 mb-4 font-sans font-sans">
-                <div>
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 dark:border-[#3D2E24] pb-4 mb-4 font-sans">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
@@ -366,9 +366,9 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                     </span>
                     <h2 className="text-lg font-bold text-slate-900 dark:text-[#ECE4DE] tracking-tight">{activeRepo.name}</h2>
                   </div>
-                  <span className="text-xs text-slate-400 dark:text-slate-500 font-mono block mt-1">{activeRepo.url}</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 font-mono block mt-1 truncate" title={activeRepo.url}>{activeRepo.url}</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
                     onClick={() => handleRemoveRepo(activeRepo)}
                     className="px-3 py-1.5 border border-red-200 dark:border-red-900/50 rounded-lg text-xs font-semibold text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors flex items-center gap-1.5 cursor-pointer font-sans"
@@ -435,7 +435,7 @@ export default function RepoIntelligence({ state, onSaveState, goToTab }: RepoIn
                   <button
                     onClick={handleSyncWebhooks}
                     disabled={isSyncingWebhooks}
-                    className="w-full sm:w-auto px-4 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 disabled:bg-slate-150 disabled:dark:bg-slate-900 disabled:text-slate-400 disabled:dark:text-slate-600 text-white font-bold text-xs rounded-lg shadow-2xs transition-all duration-155 flex items-center justify-center gap-2 cursor-pointer select-none font-sans"
+                    className="w-full sm:w-auto px-4 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 disabled:bg-slate-50 disabled:dark:bg-slate-900 disabled:text-slate-400 disabled:dark:text-slate-600 text-slate-700 dark:text-white border border-slate-200 dark:border-slate-700 font-bold text-xs rounded-lg shadow-2xs transition-all duration-155 flex items-center justify-center gap-2 cursor-pointer select-none font-sans"
                   >
                     {isSyncingWebhooks ? (
                       <>
