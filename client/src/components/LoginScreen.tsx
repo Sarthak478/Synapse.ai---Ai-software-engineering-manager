@@ -228,7 +228,7 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
             SYNAPSE<span className="text-teal-400 font-extrabold font-sans">.AI</span>
           </h1>
           <p className="text-[10px] font-mono text-teal-400/80 font-bold uppercase tracking-widest mt-1.5 flex items-center gap-2">
-            <Terminal className="h-3 w-3" /> SECURE AGENTIC PM WORKSPACE GATEWAY
+            <Terminal className="h-3 w-3" /> AI-POWERED ENGINEERING MANAGEMENT PLATFORM
           </p>
         </motion.div>
 
