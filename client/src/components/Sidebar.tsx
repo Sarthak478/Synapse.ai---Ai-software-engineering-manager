@@ -21,7 +21,10 @@ import {
   Trash2,
   Settings,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Mail,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { Developer } from "../types";
 import { MASKED_GEMINI_KEY } from "../geminiSettings";
@@ -37,7 +40,7 @@ interface SidebarProps {
   onSetActiveDevId: (id: string | null) => void;
   onAddDeveloper: (dev: Developer) => Promise<void>;
   onRemoveDeveloper: (devId: string) => Promise<void>;
-  onUpdateProfileAndSettings: (dev: Developer, rawGeminiKey?: string) => Promise<void>;
+  onUpdateProfileAndSettings: (dev: Developer, rawGeminiKey?: string, settings?: any) => Promise<void>;
   settings?: any;
   showProfileModal: boolean;
   setShowProfileModal: (val: boolean) => void;
@@ -96,6 +99,13 @@ export default function Sidebar({
   const [editCustomEndpoint, setEditCustomEndpoint] = useState("");
   const [editGeminiKey, setEditGeminiKey] = useState("");
   const [editAvatar, setEditAvatar] = useState("");
+  
+  // Settings Accordion State
+  const [expandedAccordion, setExpandedAccordion] = useState<"profile" | "security" | "integrations" | "email">("profile");
+  
+  // Resend Email Config State (Head only)
+  const [editResendApiKey, setEditResendApiKey] = useState("");
+  const [editResendFromEmail, setEditResendFromEmail] = useState("");
 
   // Toast notifications for Clipboard & Actions
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -120,6 +130,8 @@ export default function Sidebar({
     }
     if (settings) {
       setEditGeminiKey(settings.hasGeminiApiKey ? MASKED_GEMINI_KEY : "");
+      setEditResendApiKey(settings.hasResendConfigured ? "********" : "");
+      setEditResendFromEmail(settings.resendFromEmail || "");
     }
   }, [activeDev, settings, showProfileModal]);
 
@@ -203,25 +215,29 @@ export default function Sidebar({
     e.preventDefault();
     if (!activeDev) return;
 
-    const updatedDevObj: Developer = {
+    const updatedDevObj = {
       ...activeDev,
-      name: editName.trim(),
-      role: editRole.trim(),
-      email: editEmail.trim(),
-      password: editPassword.trim(),
-      avatar: editAvatar || activeDev.avatar,
+      name: editName,
+      role: editRole,
+      email: editEmail,
       skills: editSkills.split(",").map(s => s.trim()).filter(Boolean),
       personalCredentials: {
-        jiraDomain: editJiraDomain.trim(),
-        apiToken: editApiToken.trim(),
-        githubToken: editGithubToken.trim(),
-        customEndpoint: editCustomEndpoint.trim()
-      }
+        jiraDomain: editJiraDomain,
+        apiToken: editApiToken,
+        githubToken: editGithubToken,
+        customEndpoint: editCustomEndpoint,
+      },
+      avatar: editAvatar,
+      ...(editPassword ? { password: editPassword } : {})
     };
-
-    const keyToSave = editGeminiKey !== MASKED_GEMINI_KEY ? editGeminiKey.trim() : undefined;
     
-    await onUpdateProfileAndSettings(updatedDevObj, keyToSave);
+    const keyToSave = editGeminiKey === MASKED_GEMINI_KEY ? undefined : editGeminiKey;
+    const resendKeyToSave = editResendApiKey === "********" ? undefined : editResendApiKey;
+    
+    await onUpdateProfileAndSettings(updatedDevObj, keyToSave, {
+      resendApiKey: resendKeyToSave,
+      resendFromEmail: editResendFromEmail
+    });
 
     setShowProfileModal(false);
     showToast("✓ Personal Profile & Keys Saved!");
@@ -514,201 +530,345 @@ export default function Sidebar({
                   </button>
                 </div>
 
-                {/* ── AVATAR PICKER ── */}
-                {(() => {
-                  const DEFAULT_AVATARS = [
-                    `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=alpha&backgroundColor=0d1117`,
-                    `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=beta&backgroundColor=134e4a`,
-                    `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=gamma&backgroundColor=1c1917`,
-                    `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=delta&backgroundColor=1e1b4b`,
-                    `https://api.dicebear.com/7.x/lorelei/svg?seed=alex`,
-                    `https://api.dicebear.com/7.x/lorelei/svg?seed=morgan`,
-                    `https://api.dicebear.com/7.x/lorelei/svg?seed=jordan`,
-                    `https://api.dicebear.com/7.x/lorelei/svg?seed=riley`,
-                  ];
-                  return (
-                    <div className="bg-[#1A120C]/80 border border-[#3D2E24] rounded-xl p-3 flex flex-col gap-2">
+                <div className="flex flex-col gap-3">
+                  {/* ACCORDION 1: Profile Information */}
+                  <div className="bg-[#1C130E] border border-[#3D2E24] rounded-xl overflow-hidden transition-all duration-300">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedAccordion(expandedAccordion === "profile" ? "profile" : "profile")}
+                      className={`w-full flex items-center justify-between p-4 cursor-pointer hover:bg-[#251A13] transition-colors ${
+                        expandedAccordion === "profile" ? "border-b border-[#3D2E24]" : ""
+                      }`}
+                    >
                       <div className="flex items-center gap-3">
-                        {/* Live avatar preview */}
-                        <div className="relative shrink-0">
-                          <img
-                            src={editAvatar || activeDev?.avatar || DEFAULT_AVATARS[0]}
-                            alt="Preview"
-                            className="w-14 h-14 rounded-full object-cover border-2 border-teal-500 shadow-lg shadow-teal-900/40"
-                          />
-                          <span className="absolute -bottom-1 -right-1 bg-teal-600 text-white text-[7px] font-bold px-1 py-0.5 rounded-full uppercase tracking-wider">Preview</span>
+                        <div className={`p-2 rounded-lg ${expandedAccordion === "profile" ? "bg-teal-900/30 text-teal-400" : "bg-[#2D2018] text-slate-400"}`}>
+                          <User className="h-4 w-4" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[9px] font-mono font-bold text-teal-400 uppercase tracking-wider mb-1">Profile Avatar</p>
-                          <p className="text-[9px] text-slate-500 leading-snug">Pick a default or upload your own image.</p>
-                          {/* Upload custom */}
-                          <label className="mt-1.5 inline-flex items-center gap-1.5 cursor-pointer py-1 px-2.5 bg-[#251A13] hover:bg-[#3D2E24] border border-[#3D2E24] hover:border-teal-700 text-slate-300 hover:text-white rounded-lg text-[9px] font-bold transition-all">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                            Upload Photo
-                            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
-                          </label>
+                        <div className="text-left">
+                          <h4 className="text-sm font-bold text-[#ECE4DE]">Profile Information</h4>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Avatar, Name, Role, Skills</p>
                         </div>
                       </div>
-                      {/* Default avatar grid */}
-                      <div className="grid grid-cols-8 gap-1.5 mt-1">
-                        {DEFAULT_AVATARS.map((url, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => setEditAvatar(url)}
-                            title={`Default avatar ${i + 1}`}
-                            className={`w-8 h-8 rounded-full overflow-hidden border-2 transition-all hover:scale-110 ${
-                              editAvatar === url
-                                ? "border-teal-400 ring-1 ring-teal-400/60 scale-110"
-                                : "border-[#3D2E24] hover:border-teal-700"
-                            }`}
-                          >
-                            <img src={url} alt={`Avatar ${i + 1}`} className="w-full h-full object-cover bg-[#1C1410]" />
-                          </button>
-                        ))}
+                      {expandedAccordion === "profile" ? (
+                        <ChevronUp className="h-5 w-5 text-teal-500" />
+                      ) : (
+                        <ChevronDown className="h-5 w-5 text-slate-600" />
+                      )}
+                    </button>
+                    {expandedAccordion === "profile" && (
+                      <div className="p-4 bg-[#140D09] space-y-4 animate-fade-in">
+                        {/* ── AVATAR PICKER ── */}
+                        {(() => {
+                          const DEFAULT_AVATARS = [
+                            `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=alpha&backgroundColor=0d1117`,
+                            `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=beta&backgroundColor=134e4a`,
+                            `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=gamma&backgroundColor=1c1917`,
+                            `https://api.dicebear.com/7.x/bottts-neutral/svg?seed=delta&backgroundColor=1e1b4b`,
+                            `https://api.dicebear.com/7.x/lorelei/svg?seed=alex`,
+                            `https://api.dicebear.com/7.x/lorelei/svg?seed=morgan`,
+                            `https://api.dicebear.com/7.x/lorelei/svg?seed=jordan`,
+                            `https://api.dicebear.com/7.x/lorelei/svg?seed=riley`,
+                          ];
+                          return (
+                            <div className="bg-[#1A120C]/80 border border-[#3D2E24] rounded-xl p-4 flex flex-col gap-3">
+                              <div className="flex items-center gap-4">
+                                {/* Live avatar preview */}
+                                <div className="relative shrink-0">
+                                  <img
+                                    src={editAvatar || activeDev?.avatar || DEFAULT_AVATARS[0]}
+                                    alt="Preview"
+                                    className="w-16 h-16 rounded-full object-cover border-2 border-teal-500 shadow-lg shadow-teal-900/40"
+                                  />
+                                  <span className="absolute -bottom-1 -right-1 bg-teal-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider">Preview</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-[10px] font-mono font-bold text-teal-400 uppercase tracking-wider mb-1">Profile Avatar</p>
+                                  <p className="text-[10px] text-slate-500 leading-snug">Pick a default or upload your own image.</p>
+                                  {/* Upload custom */}
+                                  <label className="mt-2 inline-flex items-center gap-1.5 cursor-pointer py-1.5 px-3 bg-[#251A13] hover:bg-[#3D2E24] border border-[#3D2E24] hover:border-teal-700 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-all">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                    Upload Photo
+                                    <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                                  </label>
+                                </div>
+                              </div>
+                              {/* Default avatar grid */}
+                              <div className="grid grid-cols-8 gap-2 mt-2">
+                                {DEFAULT_AVATARS.map((url, i) => (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => setEditAvatar(url)}
+                                    title={`Default avatar ${i + 1}`}
+                                    className={`w-10 h-10 rounded-full overflow-hidden border-2 transition-all hover:scale-110 ${
+                                      editAvatar === url
+                                        ? "border-teal-400 ring-2 ring-teal-400/30 scale-110"
+                                        : "border-[#3D2E24] hover:border-teal-700"
+                                    }`}
+                                  >
+                                    <img src={url} alt={`Avatar ${i + 1}`} className="w-full h-full object-cover bg-[#1C1410]" />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[10px] font-mono font-bold text-slate-400 uppercase block mb-1.5">
+                              Full Name
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              className="w-full text-sm p-3 bg-[#251A13] border border-[#3D2E24] rounded-xl focus:outline-none focus:border-teal-500 text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-mono font-bold text-slate-400 uppercase block mb-1.5">
+                              Role / Designation
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={editRole}
+                              onChange={(e) => setEditRole(e.target.value)}
+                              className="w-full text-sm p-3 bg-[#251A13] border border-[#3D2E24] rounded-xl focus:outline-none focus:border-teal-500 text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-mono font-bold text-slate-400 uppercase block mb-1.5">
+                              Email Address
+                            </label>
+                            <input
+                              type="email"
+                              value={editEmail}
+                              onChange={(e) => setEditEmail(e.target.value)}
+                              className="w-full text-sm p-3 bg-[#251A13] border border-[#3D2E24] rounded-xl focus:outline-none focus:border-teal-500 text-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-mono font-bold text-slate-400 uppercase block mb-1.5">
+                              Skills (Comma separated)
+                            </label>
+                            <input
+                              type="text"
+                              value={editSkills}
+                              onChange={(e) => setEditSkills(e.target.value)}
+                              className="w-full text-sm p-3 bg-[#251A13] border border-[#3D2E24] rounded-xl focus:outline-none focus:border-teal-500 text-white"
+                            />
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })()}
-
-                <div className="grid grid-cols-2 gap-3 text-left">
-                  {/* Left Column: Personal info */}
-                  <div className="space-y-3">
-                    <h4 className="text-[10px] font-mono font-black text-teal-400 uppercase tracking-wider border-b border-[#3D2E24]/50 pb-1">
-                      Personal Information
-                    </h4>
-                    
-                    <div>
-                      <label className="text-[9px] font-mono font-bold text-slate-400 uppercase block mb-1">
-                        Full Name
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="w-full text-xs p-2.5 bg-[#251A13] border border-[#3D2E24] rounded-lg focus:outline-none focus:border-teal-500 text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[9px] font-mono font-bold text-slate-400 uppercase block mb-1">
-                        Role / Designation
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={editRole}
-                        onChange={(e) => setEditRole(e.target.value)}
-                        className="w-full text-xs p-2.5 bg-[#251A13] border border-[#3D2E24] rounded-lg focus:outline-none focus:border-teal-500 text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[9px] font-mono font-bold text-slate-400 uppercase block mb-1">
-                        Email Address
-                      </label>
-                      <input
-                        type="email"
-                        value={editEmail}
-                        onChange={(e) => setEditEmail(e.target.value)}
-                        className="w-full text-xs p-2.5 bg-[#251A13] border border-[#3D2E24] rounded-lg focus:outline-none focus:border-teal-500 text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[9px] font-mono font-bold text-slate-400 uppercase block mb-1">
-                        Skills (Comma separated)
-                      </label>
-                      <input
-                        type="text"
-                        value={editSkills}
-                        onChange={(e) => setEditSkills(e.target.value)}
-                        className="w-full text-xs p-2.5 bg-[#251A13] border border-[#3D2E24] rounded-lg focus:outline-none focus:border-teal-500 text-white"
-                      />
-                    </div>
+                    )}
                   </div>
 
-                  {/* Right Column: Secure credentials & password */}
-                  <div className="space-y-3">
-                    <h4 className="text-[10px] font-mono font-black text-teal-400 uppercase tracking-wider border-b border-[#3D2E24]/50 pb-1">
-                      Credentials & API Access
-                    </h4>
-
-                    <div>
-                      <label className="text-[9px] font-mono font-bold text-slate-400 uppercase block mb-1 flex items-center gap-1">
-                        User ID <span className="text-[8px] text-red-400 font-normal lowercase">(cannot be changed)</span>
-                      </label>
-                      <input
-                        type="text"
-                        disabled
-                        value={activeDev?.userId || ""}
-                        className="w-full text-xs p-2.5 bg-[#1C130E] border border-[#2D2018] text-slate-500 rounded-lg cursor-not-allowed font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[9px] font-mono font-bold text-slate-400 uppercase block mb-1">
-                        Change Password
-                      </label>
-                      <input
-                        type="password"
-                        value={editPassword}
-                        onChange={(e) => setEditPassword(e.target.value)}
-                        placeholder="Leave blank to keep current"
-                        className="w-full text-xs p-2.5 bg-[#251A13] border border-[#3D2E24] rounded-lg focus:outline-none focus:border-teal-500 text-white font-mono"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[9px] font-mono font-bold text-slate-400 uppercase block mb-1">
-                        Jira Server Domain
-                      </label>
-                      <input
-                        type="text"
-                        value={editJiraDomain}
-                        onChange={(e) => setEditJiraDomain(e.target.value)}
-                        placeholder="company.atlassian.net"
-                        className="w-full text-xs p-2.5 bg-[#251A13] border border-[#3D2E24] rounded-lg focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-700"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[9px] font-mono font-bold text-slate-400 uppercase">
-                          Jira API Token
-                        </label>
-                        <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" className="text-[8px] font-mono text-teal-500/70 hover:text-teal-400 flex items-center gap-0.5 transition-colors" tabIndex={-1}>
-                          Get Token <ExternalLink className="h-2 w-2" />
-                        </a>
+                  {/* ACCORDION 2: Security */}
+                  <div className="bg-[#1C130E] border border-[#3D2E24] rounded-xl overflow-hidden transition-all duration-300">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedAccordion(expandedAccordion === "security" ? "profile" : "security")}
+                      className={`w-full flex items-center justify-between p-4 cursor-pointer hover:bg-[#251A13] transition-colors ${
+                        expandedAccordion === "security" ? "border-b border-[#3D2E24]" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${expandedAccordion === "security" ? "bg-teal-900/30 text-teal-400" : "bg-[#2D2018] text-slate-400"}`}>
+                          <Lock className="h-4 w-4" />
+                        </div>
+                        <div className="text-left">
+                          <h4 className="text-sm font-bold text-[#ECE4DE]">Security</h4>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">User ID, Password Update</p>
+                        </div>
                       </div>
-                      <input
-                        type="password"
-                        value={editApiToken}
-                        onChange={(e) => setEditApiToken(e.target.value)}
-                        placeholder="••••••••••••"
-                        className="w-full text-xs p-2.5 bg-[#251A13] border border-[#3D2E24] rounded-lg focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-700"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[9px] font-mono font-bold text-teal-400 uppercase">
-                          Gemini API Key (Project Shared)
-                        </label>
-                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-[8px] font-mono text-teal-500/70 hover:text-teal-400 flex items-center gap-0.5 transition-colors" tabIndex={-1}>
-                          Get Key <ExternalLink className="h-2 w-2" />
-                        </a>
+                      {expandedAccordion === "security" ? (
+                        <ChevronUp className="h-5 w-5 text-teal-500" />
+                      ) : (
+                        <ChevronDown className="h-5 w-5 text-slate-600" />
+                      )}
+                    </button>
+                    {expandedAccordion === "security" && (
+                      <div className="p-4 bg-[#140D09] space-y-4 animate-fade-in">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[10px] font-mono font-bold text-slate-400 uppercase block mb-1.5 flex items-center gap-1">
+                              User ID <span className="text-[9px] text-red-400 font-normal lowercase">(cannot be changed)</span>
+                            </label>
+                            <input
+                              type="text"
+                              disabled
+                              value={activeDev?.userId || ""}
+                              className="w-full text-sm p-3 bg-[#1C130E] border border-[#2D2018] text-slate-500 rounded-xl cursor-not-allowed font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-mono font-bold text-slate-400 uppercase block mb-1.5">
+                              Change Password
+                            </label>
+                            <input
+                              type="password"
+                              value={editPassword}
+                              onChange={(e) => setEditPassword(e.target.value)}
+                              placeholder="Leave blank to keep current"
+                              className="w-full text-sm p-3 bg-[#251A13] border border-[#3D2E24] rounded-xl focus:outline-none focus:border-teal-500 text-white font-mono"
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <input
-                        type="password"
-                        value={editGeminiKey}
-                        onChange={(e) => setEditGeminiKey(e.target.value)}
-                        placeholder="AI Studio API Key"
-                        className="w-full text-xs p-2.5 bg-[#251A13] border border-teal-900/50 rounded-lg focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-700"
-                      />
-                    </div>
+                    )}
                   </div>
+
+                  {/* ACCORDION 3: API Integrations */}
+                  <div className="bg-[#1C130E] border border-[#3D2E24] rounded-xl overflow-hidden transition-all duration-300">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedAccordion(expandedAccordion === "integrations" ? "profile" : "integrations")}
+                      className={`w-full flex items-center justify-between p-4 cursor-pointer hover:bg-[#251A13] transition-colors ${
+                        expandedAccordion === "integrations" ? "border-b border-[#3D2E24]" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${expandedAccordion === "integrations" ? "bg-teal-900/30 text-teal-400" : "bg-[#2D2018] text-slate-400"}`}>
+                          <Code2 className="h-4 w-4" />
+                        </div>
+                        <div className="text-left">
+                          <h4 className="text-sm font-bold text-[#ECE4DE]">API Integrations</h4>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5">Jira, GitHub, Gemini AI</p>
+                        </div>
+                      </div>
+                      {expandedAccordion === "integrations" ? (
+                        <ChevronUp className="h-5 w-5 text-teal-500" />
+                      ) : (
+                        <ChevronDown className="h-5 w-5 text-slate-600" />
+                      )}
+                    </button>
+                    {expandedAccordion === "integrations" && (
+                      <div className="p-4 bg-[#140D09] space-y-4 animate-fade-in">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-[10px] font-mono font-bold text-slate-400 uppercase block mb-1.5">
+                              Jira Server Domain
+                            </label>
+                            <input
+                              type="text"
+                              value={editJiraDomain}
+                              onChange={(e) => setEditJiraDomain(e.target.value)}
+                              placeholder="company.atlassian.net"
+                              className="w-full text-sm p-3 bg-[#251A13] border border-[#3D2E24] rounded-xl focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-700"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="text-[10px] font-mono font-bold text-slate-400 uppercase">
+                                Jira API Token
+                              </label>
+                              <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" className="text-[9px] font-mono text-teal-500/70 hover:text-teal-400 flex items-center gap-0.5 transition-colors" tabIndex={-1}>
+                                Get Token <ExternalLink className="h-3 w-3" />
+                              </a>
+                            </div>
+                            <input
+                              type="password"
+                              value={editApiToken}
+                              onChange={(e) => setEditApiToken(e.target.value)}
+                              placeholder="••••••••••••"
+                              className="w-full text-sm p-3 bg-[#251A13] border border-[#3D2E24] rounded-xl focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-700"
+                            />
+                          </div>
+                        </div>
+                        {isHead && (
+                          <div className="pt-2 border-t border-[#3D2E24]/50">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <label className="text-[10px] font-mono font-bold text-teal-400 uppercase">
+                                Gemini API Key (Project Shared)
+                              </label>
+                              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-[9px] font-mono text-teal-500/70 hover:text-teal-400 flex items-center gap-0.5 transition-colors" tabIndex={-1}>
+                                Get Key <ExternalLink className="h-3 w-3" />
+                              </a>
+                            </div>
+                            <input
+                              type="password"
+                              value={editGeminiKey}
+                              onChange={(e) => setEditGeminiKey(e.target.value)}
+                              placeholder="AI Studio API Key"
+                              className="w-full text-sm p-3 bg-[#251A13] border border-teal-900/50 rounded-xl focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-700"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ACCORDION 4: Email Notifications (Head Only) */}
+                  {isHead && (
+                    <div className="bg-[#1C130E] border border-[#3D2E24] rounded-xl overflow-hidden transition-all duration-300">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedAccordion(expandedAccordion === "email" ? "profile" : "email")}
+                        className={`w-full flex items-center justify-between p-4 cursor-pointer hover:bg-[#251A13] transition-colors ${
+                          expandedAccordion === "email" ? "border-b border-[#3D2E24]" : ""
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${expandedAccordion === "email" ? "bg-teal-900/30 text-teal-400" : "bg-[#2D2018] text-slate-400"}`}>
+                            <Mail className="h-4 w-4" />
+                          </div>
+                          <div className="text-left">
+                            <h4 className="text-sm font-bold text-[#ECE4DE]">Email Configuration</h4>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">Automated Reset & Setup Links (Resend)</p>
+                          </div>
+                        </div>
+                        {expandedAccordion === "email" ? (
+                          <ChevronUp className="h-5 w-5 text-teal-500" />
+                        ) : (
+                          <ChevronDown className="h-5 w-5 text-slate-600" />
+                        )}
+                      </button>
+                      {expandedAccordion === "email" && (
+                        <div className="p-4 bg-[#140D09] space-y-4 animate-fade-in">
+                          <div className="bg-amber-950/20 border border-amber-900/30 rounded-lg p-3 text-xs text-amber-400 flex items-start gap-2">
+                            <Crown className="h-4 w-4 shrink-0 mt-0.5" />
+                            <div className="leading-snug">
+                              Configuring this enables the Hybrid Email System. Team members will receive beautiful HTML emails for onboarding and password resets via secure time-bound links. If left blank, the system falls back to manual passcode recovery.
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-[10px] font-mono font-bold text-teal-400 uppercase">
+                                  Resend API Key
+                                </label>
+                                <a href="https://resend.com/api-keys" target="_blank" rel="noreferrer" className="text-[9px] font-mono text-teal-500/70 hover:text-teal-400 flex items-center gap-0.5 transition-colors" tabIndex={-1}>
+                                  Get Key <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </div>
+                              <input
+                                type="password"
+                                value={editResendApiKey}
+                                onChange={(e) => setEditResendApiKey(e.target.value)}
+                                placeholder="re_xxxxxxxxxxxxxx"
+                                className="w-full text-sm p-3 bg-[#251A13] border border-teal-900/50 rounded-xl focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-700"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-mono font-bold text-teal-400 uppercase block mb-1.5">
+                                Verified Sender Email
+                              </label>
+                              <input
+                                type="email"
+                                value={editResendFromEmail}
+                                onChange={(e) => setEditResendFromEmail(e.target.value)}
+                                placeholder="system@yourdomain.com"
+                                className="w-full text-sm p-3 bg-[#251A13] border border-[#3D2E24] rounded-xl focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-700"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="border-t border-[#3D2E24]/50 pt-3 flex gap-2 justify-end">

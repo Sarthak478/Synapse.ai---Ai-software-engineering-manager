@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Shield, KeyRound, User, ChevronRight, AlertCircle, Sparkles, Server, Terminal, Lock, UserPlus, Crown, Info } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Developer } from "../types";
@@ -29,6 +29,20 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
   const [isTeamHeadRecovery, setIsTeamHeadRecovery] = useState(false);
   const [recoveryKeyInput, setRecoveryKeyInput] = useState("");
   const [newPasswordInput, setNewPasswordInput] = useState("");
+
+  // Password Setup (mustResetPassword) flow
+  const [showPasswordSetup, setShowPasswordSetup] = useState(false);
+  const [setupToken, setSetupToken] = useState("");
+  const [setupNewPassword, setSetupNewPassword] = useState("");
+  const [setupConfirmPassword, setSetupConfirmPassword] = useState("");
+  const [setupWorkspaceId, setSetupWorkspaceId] = useState("");
+
+  // Email-based reset flow
+  const [showEmailResetSent, setShowEmailResetSent] = useState(false);
+  const [showResetViaLink, setShowResetViaLink] = useState(false);
+  const [resetToken, setResetToken] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [resetWorkspaceId, setResetWorkspaceId] = useState("");
 
   // Registration fields
   const [regName, setRegName] = useState("");
@@ -71,6 +85,15 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
         throw new Error(data.error || "Session authentication failed.");
       }
 
+      if (data.mustResetPassword) {
+        // Redirect to password setup screen
+        setSetupToken(data.setupToken);
+        setSetupWorkspaceId(data.workspaceId);
+        setShowPasswordSetup(true);
+        setError(null);
+        return;
+      }
+
       // SECURITY FIX #3: Token is in an HttpOnly cookie — we only pass identifiers
       onLoginSuccess(null, data.devId, rememberMe, data.workspaceId);
     } catch (err: any) {
@@ -93,15 +116,30 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
     setError(null);
     setLoading(true);
     try {
-      const response = await fetch("/api/auth/forgot-password", {
+      // First try email-based reset
+      const emailRes = await fetch("/api/auth/send-reset-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ workspaceId, userId: username })
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to request password reset.");
-      setSuccessMsg(data.message);
-      setIsForgotPassword(true);
+      const emailData = await emailRes.json();
+
+      if (emailData.emailNotConfigured) {
+        // Fall back to passcode method
+        const response = await fetch("/api/auth/forgot-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workspaceId, userId: username })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Failed to request password reset.");
+        setSuccessMsg(data.message);
+        setIsForgotPassword(true);
+      } else {
+        // Email was sent (or user doesn't exist — same message for security)
+        setShowEmailResetSent(true);
+        setSuccessMsg(emailData.message || "If an account with that User ID exists, a reset email has been sent.");
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -202,6 +240,88 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
     setIsTeamHeadRecovery(false);
   };
 
+  // Handle first-login password setup
+  const handlePasswordSetup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (setupNewPassword !== setupConfirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await fetch("/api/auth/setup-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          workspaceId: setupWorkspaceId,
+          newPassword: setupNewPassword,
+          setupToken
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to set password.");
+      
+      onLoginSuccess(null, data.devId, false, data.workspaceId);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle email-based password reset via link
+  const handleResetViaLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await fetch("/api/auth/reset-via-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: resetToken,
+          newPassword: resetNewPassword,
+          workspaceId: resetWorkspaceId
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to reset password.");
+      
+      setSuccessMsg(data.message);
+      setShowResetViaLink(false);
+      setResetToken("");
+      setResetNewPassword("");
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Detect reset-token or setup-token from URL parameters
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const resetTok = params.get("reset-token");
+    const setupTok = params.get("setup-token");
+    const ws = params.get("workspace");
+    
+    if (resetTok && ws) {
+      setResetToken(resetTok);
+      setResetWorkspaceId(ws);
+      setShowResetViaLink(true);
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (setupTok && ws) {
+      setSetupToken(setupTok);
+      setSetupWorkspaceId(ws);
+      setShowPasswordSetup(true);
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen w-screen flex items-center justify-center bg-[#0C0806] text-[#ECE4DE] px-4 font-sans relative overflow-hidden select-none">
       
@@ -213,6 +333,143 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
       <div className="absolute bottom-[-25%] right-[-15%] w-[60%] h-[60%] bg-[#4A3225]/15 rounded-full blur-[140px] pointer-events-none"></div>
 
       <div className="max-w-md w-full flex flex-col gap-6 relative z-10 font-sans mt-8 mb-8">
+
+        {/* Password Setup Modal (First Login) */}
+        {showPasswordSetup && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#1A120C] border border-[#3D2E24] rounded-2xl p-8 shadow-2xl"
+          >
+            <div className="text-center mb-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-700 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Lock className="h-6 w-6 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-white">Set Your Password</h2>
+              <p className="text-sm text-slate-400 mt-2">Welcome! Please choose a secure password for your account.</p>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-950/40 border border-red-900/40 rounded-lg text-xs text-red-300 flex items-start gap-2 mb-4">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handlePasswordSetup} className="flex flex-col gap-4">
+              <div>
+                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase block mb-1.5">New Password</label>
+                <input
+                  type="password"
+                  required
+                  value={setupNewPassword}
+                  onChange={(e) => setSetupNewPassword(e.target.value)}
+                  placeholder="Min 8 chars, upper, lower, number, special"
+                  className="w-full text-sm p-3 bg-[#251A13] border border-[#3D2E24] rounded-xl focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-600"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase block mb-1.5">Confirm Password</label>
+                <input
+                  type="password"
+                  required
+                  value={setupConfirmPassword}
+                  onChange={(e) => setSetupConfirmPassword(e.target.value)}
+                  placeholder="Re-enter your password"
+                  className="w-full text-sm p-3 bg-[#251A13] border border-[#3D2E24] rounded-xl focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-600"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold text-sm rounded-xl transition-all shadow-lg cursor-pointer disabled:opacity-50"
+              >
+                {loading ? "Setting Password..." : "Set Password & Enter Workspace"}
+              </button>
+            </form>
+          </motion.div>
+        )}
+
+        {/* Email Reset Via Link Modal */}
+        {showResetViaLink && !showPasswordSetup && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#1A120C] border border-[#3D2E24] rounded-2xl p-8 shadow-2xl"
+          >
+            <div className="text-center mb-6">
+              <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-700 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <KeyRound className="h-6 w-6 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-white">Reset Your Password</h2>
+              <p className="text-sm text-slate-400 mt-2">Enter your new password below. This link expires in 15 minutes.</p>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-red-950/40 border border-red-900/40 rounded-lg text-xs text-red-300 flex items-start gap-2 mb-4">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+            {successMsg && (
+              <div className="p-3 bg-teal-950/40 border border-teal-900/40 rounded-lg text-xs text-teal-300 mb-4">
+                {successMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleResetViaLink} className="flex flex-col gap-4">
+              <div>
+                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase block mb-1.5">New Password</label>
+                <input
+                  type="password"
+                  required
+                  value={resetNewPassword}
+                  onChange={(e) => setResetNewPassword(e.target.value)}
+                  placeholder="Min 8 chars, upper, lower, number, special"
+                  className="w-full text-sm p-3 bg-[#251A13] border border-[#3D2E24] rounded-xl focus:outline-none focus:border-teal-500 text-white font-mono placeholder-slate-600"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 bg-teal-600 hover:bg-teal-500 text-white font-bold text-sm rounded-xl transition-all shadow-lg cursor-pointer disabled:opacity-50"
+              >
+                {loading ? "Resetting..." : "Reset Password"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowResetViaLink(false); setResetToken(""); }}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
+              >
+                ← Back to Login
+              </button>
+            </form>
+          </motion.div>
+        )}
+
+        {/* Email Reset Sent Confirmation */}
+        {showEmailResetSent && !showPasswordSetup && !showResetViaLink && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#1A120C] border border-[#3D2E24] rounded-2xl p-8 shadow-2xl text-center"
+          >
+            <div className="w-12 h-12 bg-gradient-to-br from-teal-500 to-teal-700 rounded-xl flex items-center justify-center mx-auto mb-4">
+              <Shield className="h-6 w-6 text-white" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Check Your Email</h2>
+            <p className="text-sm text-slate-400 mb-6">{successMsg}</p>
+            <p className="text-xs text-slate-500 mb-4">The reset link will expire in 15 minutes.</p>
+            <button
+              onClick={() => { setShowEmailResetSent(false); setSuccessMsg(null); }}
+              className="text-xs text-teal-400 hover:text-teal-300 transition-colors cursor-pointer"
+            >
+              ← Back to Login
+            </button>
+          </motion.div>
+        )}
+
+        {!showPasswordSetup && !showResetViaLink && !showEmailResetSent && (<>
         
         {/* Animated Brand Header */}
         <motion.div 
@@ -688,6 +945,7 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
             </motion.div>
           )}
         </AnimatePresence>
+        </>)}
 
         {/* Secure Footer Info */}
         <motion.p 
