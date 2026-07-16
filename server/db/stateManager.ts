@@ -99,7 +99,7 @@ export function verifyPassword(plain: string, hash: string): boolean {
 const DEV_DISK_FIELDS = [
   "id", "workspaceId", "name", "avatar", "email", "role", "skills",
   "workloadPoints", "velocity", "activeTaskId", "isHead",
-  "userId", "password", "passwordChangedAt", "addedBy", "personalCredentials", "contributions"
+  "userId", "password", "passwordHistory", "passwordChangedAt", "addedBy", "personalCredentials", "contributions"
 ] as const;
 
 /** Strips any unknown fields from a developer object before writing to DB */
@@ -108,7 +108,17 @@ function sanitizeDevForDisk(d: any): any {
   for (const key of DEV_DISK_FIELDS) {
     if (key in d) safe[key] = d[key];
   }
-  // personalCredentials are zero-knowledge – always blank on disk
+  
+  // SECURITY FIX: Encrypt personal credentials at rest
+  if (d.personalCredentials && Object.keys(d.personalCredentials).length > 0) {
+    try {
+      safe.personalCredentialsEncrypted = encryptKey(JSON.stringify(d.personalCredentials));
+    } catch (e) {
+      console.error("[StateManager] Failed to encrypt personal credentials");
+    }
+  }
+  
+  // Wipe the plain-text credentials so they are never written to DB directly
   safe.personalCredentials = {};
   return safe;
 }
@@ -171,7 +181,14 @@ export async function getState(workspaceId: string = "default-workspace") {
         d.password = hashPasswordSync(d.password);
         docUpdated = true;
       }
-      if (!d.personalCredentials) {
+      if (d.personalCredentialsEncrypted) {
+        try {
+          d.personalCredentials = JSON.parse(decryptKey(d.personalCredentialsEncrypted));
+        } catch (e) {
+          console.error(`[StateManager] Failed to decrypt personal credentials for ${d.userId}`);
+          d.personalCredentials = {};
+        }
+      } else if (!d.personalCredentials) {
         d.personalCredentials = {};
         docUpdated = true;
       }

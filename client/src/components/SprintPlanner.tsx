@@ -41,10 +41,10 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
   // Jira Integration States - using local storage so each user's credentials remain private and personal token limits are never exceeded
   const [showJiraSettings, setShowJiraSettings] = useState<boolean>(false);
   const [showJiraImport, setShowJiraImport] = useState<boolean>(false);
-  const [jiraDomain, setJiraDomain] = useState<string>(() => localStorage.getItem("synapse-jira-domain") || "");
-  const [jiraEmail, setJiraEmail] = useState<string>(() => localStorage.getItem("synapse-jira-email") || "");
-  const [jiraApiToken, setJiraApiToken] = useState<string>(() => localStorage.getItem("synapse-jira-api-token") || "");
-  const [jiraProjectKey, setJiraProjectKey] = useState<string>(() => localStorage.getItem("synapse-jira-project-key") || "PROJ");
+  const [jiraDomain, setJiraDomain] = useState<string>(() => sessionStorage.getItem("synapse-jira-domain") || "");
+  const [jiraEmail, setJiraEmail] = useState<string>(() => sessionStorage.getItem("synapse-jira-email") || "");
+  const [jiraApiToken, setJiraApiToken] = useState<string>(() => sessionStorage.getItem("synapse-jira-api-token") || "");
+  const [jiraProjectKey, setJiraProjectKey] = useState<string>(() => sessionStorage.getItem("synapse-jira-project-key") || "PROJ");
   const [isJiraConnecting, setIsJiraConnecting] = useState<boolean>(false);
   const [jiraMessage, setJiraMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -56,19 +56,16 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
 
   // Read environment variables fallback on mount
   React.useEffect(() => {
-    const token = localStorage.getItem("synapse-session-token");
     fetch("/api/jira/env-config", {
-      headers: {
-        ...(token ? { "Authorization": `Bearer ${token}` } : {})
-      }
+      credentials: "include"
     })
       .then(res => res.json())
       .then(data => {
         setEnvJiraConfig(data);
         if (data.hasEnvConfig) {
-          if (!localStorage.getItem("synapse-jira-domain") && data.envDomain) setJiraDomain(data.envDomain);
-          if (!localStorage.getItem("synapse-jira-email") && data.envEmail) setJiraEmail(data.envEmail);
-          if (!localStorage.getItem("synapse-jira-project-key") && data.envProjectKey) setJiraProjectKey(data.envProjectKey);
+          if (!sessionStorage.getItem("synapse-jira-domain") && data.envDomain) setJiraDomain(data.envDomain);
+          if (!sessionStorage.getItem("synapse-jira-email") && data.envEmail) setJiraEmail(data.envEmail);
+          if (!sessionStorage.getItem("synapse-jira-project-key") && data.envProjectKey) setJiraProjectKey(data.envProjectKey);
         }
       })
       .catch(err => console.error("Error fetching Jira env config:", err));
@@ -80,13 +77,12 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
     setJiraMessage(null);
 
     try {
-      const token = localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token");
       const response = await fetch("/api/jira/fetch-issues", {
         method: "POST",
         headers: { 
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          "Content-Type": "application/json"
         },
+        credentials: "include",
         body: JSON.stringify({
           domain: jiraDomain,
           email: jiraEmail,
@@ -100,11 +96,12 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
         throw new Error(data.error || "Connection test failed.");
       }
 
-      // Save securely in user's browser localStorage only
-      localStorage.setItem("synapse-jira-domain", jiraDomain);
-      localStorage.setItem("synapse-jira-email", jiraEmail);
-      localStorage.setItem("synapse-jira-api-token", jiraApiToken);
-      localStorage.setItem("synapse-jira-project-key", jiraProjectKey);
+      // SECURITY FIX #1: Save Jira credentials in sessionStorage (not localStorage)
+      // to prevent persistence across browser sessions and reduce XSS theft window
+      sessionStorage.setItem("synapse-jira-domain", jiraDomain);
+      sessionStorage.setItem("synapse-jira-email", jiraEmail);
+      sessionStorage.setItem("synapse-jira-api-token", jiraApiToken);
+      sessionStorage.setItem("synapse-jira-project-key", jiraProjectKey);
 
       setJiraMessage({
         type: "success",
@@ -126,13 +123,12 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
     setIsImporting(true);
     setJiraMessage(null);
     try {
-      const token = localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token");
       const response = await fetch("/api/jira/fetch-issues", {
         method: "POST",
         headers: { 
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          "Content-Type": "application/json"
         },
+        credentials: "include",
         body: JSON.stringify({
           domain: jiraDomain || state.jiraConfig?.domain,
           email: jiraEmail || state.jiraConfig?.email,
@@ -209,13 +205,12 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
   const handleExportTaskToJira = async (task: Task) => {
     setIsExportingTaskId(task.id);
     try {
-      const token = localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token");
       const response = await fetch("/api/jira/create-issue", {
         method: "POST",
         headers: { 
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          "Content-Type": "application/json"
         },
+        credentials: "include",
         body: JSON.stringify({
           domain: jiraDomain || state.jiraConfig?.domain,
           email: jiraEmail || state.jiraConfig?.email,
@@ -400,13 +395,12 @@ export default function SprintPlanner({ state, onSaveState, goToTab, activeDevId
     setIsPlanning(true);
 
     try {
-      const token = localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token");
       const response = await fetch("/api/gemini/plan-sprint", {
         method: "POST",
         headers: { 
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          "Content-Type": "application/json"
         },
+        credentials: "include",
         body: JSON.stringify({ requirements: requirementsPrompt })
       });
 

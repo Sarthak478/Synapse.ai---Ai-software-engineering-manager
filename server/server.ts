@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 
 // Import Custom Middlewares
-import { securityMiddleware, errorBoundary, authRateLimit, aiRateLimit } from "./middlewares/security.js";
+import { securityMiddleware, errorBoundary, authRateLimit, aiRateLimit, csrfProtection } from "./middlewares/security.js";
 import { authenticateToken } from "./middlewares/auth.js";
 import { connectDB } from "./db/connection.js";
 
@@ -19,8 +19,12 @@ dotenv.config();
 const app = express();
 const PORT = parsePort(process.env.PORT, 3001);
 
+// Prevent server fingerprinting via X-Powered-By header
+app.disable("x-powered-by");
+
 // 1. Core Request Parsers
-app.use(express.json({ limit: "20mb" }));
+// SECURITY FIX #6: Strict global body size limit to prevent memory exhaustion DoS
+app.use(express.json({ limit: "100kb" }));
 
 // Enable CORS for frontend integration with production allowlisting.
 app.use(cors(buildCorsOptions(process.env)));
@@ -33,9 +37,10 @@ app.use(securityMiddleware);
 app.use("/api/auth", authRateLimit, authRouter);
 
 // Token-Protected API Routes
-app.use("/api/state", authenticateToken, stateRouter);
-app.use("/api/jira", authenticateToken, jiraRouter);
-app.use("/api/gemini", authenticateToken, aiRateLimit, geminiRouter);
+// SECURITY FIX #6: Only allow larger payloads on specific routes that genuinely need it
+app.use("/api/state", authenticateToken, csrfProtection, express.json({ limit: "5mb" }), stateRouter);
+app.use("/api/jira", authenticateToken, csrfProtection, jiraRouter);
+app.use("/api/gemini", authenticateToken, csrfProtection, aiRateLimit, geminiRouter);
 
 // Standard healthcheck endpoint
 app.get("/api/health", (req, res) => {

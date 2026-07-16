@@ -61,6 +61,7 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload)
       });
 
@@ -70,7 +71,8 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
         throw new Error(data.error || "Session authentication failed.");
       }
 
-      onLoginSuccess(data.token, data.devId, rememberMe, data.workspaceId);
+      // SECURITY FIX #3: Token is in an HttpOnly cookie — we only pass identifiers
+      onLoginSuccess(null, data.devId, rememberMe, data.workspaceId);
     } catch (err: any) {
       console.error("Login Error:", err);
       setError(err.message || "Failed to establish secure session connection.");
@@ -121,6 +123,7 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           workspaceId,
           name: regName,
@@ -140,9 +143,9 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
       if (data.masterRecoveryKey) {
         setMasterRecoveryKey(data.masterRecoveryKey);
         setShowMasterKeyModal(true);
-        setPendingLoginParams([data.token, data.devId, true, data.workspaceId]);
+        setPendingLoginParams([null, data.devId, true, data.workspaceId]);
       } else {
-        onLoginSuccess(data.token, data.devId, true, data.workspaceId);
+        onLoginSuccess(null, data.devId, true, data.workspaceId);
       }
     } catch (err: any) {
       console.error("Registration Error:", err);
@@ -583,6 +586,9 @@ export default function LoginScreen({ developers, onLoginSuccess }: LoginScreenP
                           Use Password Instead
                         </button>
                       </div>
+                      <p className="text-[10px] text-teal-500/70 mb-3 leading-relaxed">
+                        Ask your team head for the passcode for your access.
+                      </p>
                       <div className="relative">
                         <KeyRound className="absolute left-3.5 top-3.5 h-4 w-4 text-teal-600" />
                         <input

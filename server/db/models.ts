@@ -17,14 +17,21 @@ const developerSchema = new mongoose.Schema({
   isHead: { type: Boolean, default: false },
   userId: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  passwordHistory: { type: [String], default: [] },
   passwordChangedAt: { type: Date, default: null },
   addedBy: { type: String },
   personalCredentials: { type: Object, default: {} },
+  personalCredentialsEncrypted: { type: String, default: "" },
   contributions: {
     commits: { type: Number, default: 0 },
     PRs: { type: Number, default: 0 },
     reviews: { type: Number, default: 0 }
-  }
+  },
+  // SECURITY FIX #11: Account lockout after failed attempts
+  failedLoginAttempts: { type: Number, default: 0 },
+  lockedUntil: { type: Date, default: null },
+  // SECURITY FIX #12: Token Revocation support via versioning
+  sessionVersion: { type: Number, default: 1 }
 });
 
 // We keep the logic in stateManager to avoid double hashing, 
@@ -40,7 +47,9 @@ const settingsSchema = new mongoose.Schema({
   masterRecoveryKeyHash: { type: String, default: "" },
   repositories: { type: Array, default: [] },
   notifications: { type: Array, default: [] },
-  recoveryPasscodes: { type: Array, default: [] }
+  recoveryPasscodes: { type: Array, default: [] },
+  // SECURITY FIX #15: Security audit trail
+  auditLogs: { type: Array, default: [] }
 });
 
 export const Settings = mongoose.model("Settings", settingsSchema);

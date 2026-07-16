@@ -1,10 +1,11 @@
 import { Router } from "express";
 import crypto from "crypto";
-import { getState, saveState, defaultState, hashPasswordSync, encryptKey } from "../db/stateManager.js";
+import { getState, saveState, defaultState, hashPasswordSync, encryptKey, verifyPassword } from "../db/stateManager.js";
 import { Developer } from "../db/models.js";
 import { hashGeminiApiKey, hasStoredGeminiApiKey, repairGeminiKeySettings } from "./geminiKeyState.js";
 import { canDeleteDeveloper, canSetHeadPrivilege, hasAtLeastOneHead } from "./teamPermissions.js";
 import { getWorkspaceIdForDev } from "./workspaceAccess.js";
+import { getErrorMessage } from "../middlewares/security.js";
 
 const router = Router();
 
@@ -15,22 +16,46 @@ const CLIENT_SAFE_DEV_FIELDS = [
   "userId", "contributions", "addedBy", "passwordChangedAt"
 ] as const;
 
-function buildSafeDevRecord(d: any): any {
+function buildSafeDevRecord(d: any, currentDevId?: string): any {
   const safe: any = {};
   for (const key of CLIENT_SAFE_DEV_FIELDS) {
     if (key in d) safe[key] = d[key];
   }
+  
+  // SECURITY FIX: Field-Level Encryption
+  // Only expose decrypted personalCredentials to the developer who owns them
+  if (currentDevId && d.id === currentDevId && d.personalCredentials) {
+    safe.personalCredentials = d.personalCredentials;
+  }
+  
   return safe;
 }
 
-function buildSafeState(dbState: any) {
+function buildSafeState(dbState: any, currentDevId?: string) {
   const sanitized: any = { ...dbState };
-  sanitized.developers = dbState.developers.map(buildSafeDevRecord);
+  sanitized.developers = dbState.developers.map((d: any) => buildSafeDevRecord(d, currentDevId));
   sanitized.repositories = Array.isArray(dbState.repositories) ? dbState.repositories : [];
+
+  // SECURITY FIX #2: Determine if the requesting user is a Team Head
+  const isHead = currentDevId
+    ? dbState.developers.some((d: any) => d.id === currentDevId && d.isHead)
+    : false;
+
+  // SECURITY FIX #2: Filter notifications — headOnly notifications (passcode requests)
+  // are only visible to Team Heads. Also strip expired passcode notifications.
+  const now = Date.now();
+  const allNotifications = dbState.settings?.notifications || [];
+  const filteredNotifications = allNotifications.filter((n: any) => {
+    if (n.headOnly && !isHead) return false;
+    if (n.expiresAt && n.expiresAt < now) return false;
+    return true;
+  });
+
   sanitized.settings = {
     hasGeminiApiKey: hasStoredGeminiApiKey(dbState.settings),
-    notifications: dbState.settings?.notifications || [],
-    recoveryPasscodes: dbState.settings?.recoveryPasscodes || []
+    notifications: filteredNotifications,
+    // SECURITY FIX #2: Never send recoveryPasscodes to clients — they are hashed
+    // and only consumed server-side during login verification
   };
   return sanitized;
 }
@@ -39,13 +64,15 @@ function buildSafeState(dbState: any) {
 router.get("/", async (req: any, res: any) => {
   try {
     const workspaceId = await getWorkspaceIdForDev(req.userDevId);
+    if (typeof workspaceId !== "string") {
+      return res.status(400).json({ error: "Invalid workspace ID format." });
+    }
     const dbState = await getState(workspaceId);
     dbState.settings = repairGeminiKeySettings(dbState.settings);
-    const safeState = buildSafeState(dbState);
-    console.log(`[State GET] hasGeminiApiKey=${safeState.settings.hasGeminiApiKey}, hash=${(dbState.settings.geminiApiKeyHash || "").substring(0, 8)}..., encLen=${(dbState.settings.geminiApiKeyEncrypted || "").length}`);
+    const safeState = buildSafeState(dbState, req.userDevId);
     res.json(safeState);
   } catch (err: any) {
-    res.status(err.status || 500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: getErrorMessage(err, "Failed to fetch state") });
   }
 });
 
@@ -59,6 +86,9 @@ router.post("/save", async (req: any, res: any) => {
 
   try {
     const workspaceId = await getWorkspaceIdForDev(currentDevId);
+    if (typeof workspaceId !== "string") {
+      return res.status(400).json({ error: "Invalid workspace ID format." });
+    }
     const dbState = await getState(workspaceId);
     dbState.settings = repairGeminiKeySettings(dbState.settings);
 
@@ -181,15 +211,29 @@ router.post("/save", async (req: any, res: any) => {
       // SECURITY FIX #1: Hash the new password before storing; only the owner can change their own password
       if (originalDev.id === currentDevId) {
         if (typeof incomingDev.password === "string" && incomingDev.password.trim() !== "") {
-          mergedDev.password = hashPasswordSync(incomingDev.password.trim());
+          const newPass = incomingDev.password.trim();
+          
+          // SECURITY FIX: Password Anti-Reuse Policy
+          const history = originalDev.passwordHistory || [];
+          const isReused = history.some((oldHash: string) => verifyPassword(newPass, oldHash)) || verifyPassword(newPass, originalDev.password);
+          
+          if (isReused) {
+            return res.status(400).json({ error: "Your current password must not match with your last 4 passwords." });
+          }
+
+          mergedDev.password = hashPasswordSync(newPass);
+          mergedDev.passwordHistory = [originalDev.password, ...history].slice(0, 3);
           mergedDev.passwordChangedAt = new Date();
+        } else {
+          mergedDev.passwordHistory = originalDev.passwordHistory || [];
         }
       } else {
         mergedDev.password = originalDev.password;
+        mergedDev.passwordHistory = originalDev.passwordHistory || [];
       }
 
-      // personalCredentials are held strictly client-side
-      mergedDev.personalCredentials = {};
+      // SECURITY FIX: Retain personalCredentials in state object so StateManager can encrypt them at rest
+      mergedDev.personalCredentials = incomingDev.personalCredentials || originalDev.personalCredentials || {};
 
       updatedDevs.push(mergedDev);
     }
@@ -261,9 +305,9 @@ router.post("/save", async (req: any, res: any) => {
     await saveState(dbState, workspaceId);
 
     // SECURITY FIX #5: Return only whitelisted fields
-    res.json({ success: true, state: buildSafeState(dbState) });
+    res.json({ success: true, state: buildSafeState(dbState, currentDevId) });
   } catch (err: any) {
-    res.status(err.status || 500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: getErrorMessage(err, "Failed to save state") });
   }
 });
 
@@ -272,6 +316,9 @@ router.post("/reset", async (req: any, res: any) => {
   const currentDevId = req.userDevId;
   try {
     const workspaceId = await getWorkspaceIdForDev(currentDevId);
+    if (typeof workspaceId !== "string") {
+      return res.status(400).json({ error: "Invalid workspace ID format." });
+    }
     const dbState = await getState(workspaceId);
     const activeDev = dbState.developers.find((d: any) => d.id === currentDevId);
 
@@ -292,9 +339,9 @@ router.post("/reset", async (req: any, res: any) => {
     await saveState(resetState, workspaceId);
 
     // SECURITY FIX #5: Return only whitelisted fields
-    res.json({ success: true, state: buildSafeState(resetState) });
+    res.json({ success: true, state: buildSafeState(resetState, currentDevId) });
   } catch (err: any) {
-    res.status(err.status || 500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: getErrorMessage(err, "Failed to reset state") });
   }
 });
 

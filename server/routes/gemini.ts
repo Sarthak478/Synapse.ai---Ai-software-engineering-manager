@@ -4,6 +4,9 @@ import { getState, decryptKey } from "../db/stateManager.js";
 import { Developer } from "../db/models.js";
 import { normalizeDatabases } from "./repoAnalysis.js";
 import { getWorkspaceIdForDev } from "./workspaceAccess.js";
+import { getErrorMessage } from "../middlewares/security.js";
+
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 const router = Router();
 
@@ -41,21 +44,22 @@ router.use(async (req: any, res, next) => {
       if (dev) {
         const dbState = await getState(dev.workspaceId);
         const rawEncryptedKey = dbState.settings?.geminiApiKeyEncrypted || "";
-        console.log(`[Gemini] DB key lookup: workspace=${dev.workspaceId}, encLen=${rawEncryptedKey.length}, hash=${(dbState.settings?.geminiApiKeyHash || "").substring(0, 8)}...`);
-        const dbKey = decryptKey(rawEncryptedKey);
-        console.log(`[Gemini] Decrypted key: len=${dbKey.length}, valid=${dbKey ? isValidGeminiKeyFormat(dbKey) : false}`);
+        if (!IS_PRODUCTION) {
+          console.log(`[Gemini] DB key lookup: workspace=${dev.workspaceId}, encLen=${rawEncryptedKey.length}, hash=${(dbState.settings?.geminiApiKeyHash || "").substring(0, 8)}...`);
+          console.log(`[Gemini] Decrypted key: len=${dbKey.length}, valid=${dbKey ? isValidGeminiKeyFormat(dbKey) : false}`);
+        }
         if (dbKey && isValidGeminiKeyFormat(dbKey)) {
           resolvedKey = dbKey.trim();
         }
       } else {
-        console.log(`[Gemini] No developer found for id: ${req.userDevId}`);
+        if (!IS_PRODUCTION) console.log(`[Gemini] No developer found for id: ${req.userDevId}`);
       }
     } catch (e) {
       console.error("[Gemini] Failed to read API key from DB:", e);
     }
   }
 
-  console.log(`[Gemini] Key resolved: ${resolvedKey ? "YES" : "NO"}`);
+  if (!IS_PRODUCTION) console.log(`[Gemini] Key resolved: ${resolvedKey ? "YES" : "NO"}`);
 
   if (resolvedKey) {
     req.ai = new GoogleGenAI({
@@ -183,7 +187,7 @@ router.post("/analyze-repo", async (req: any, res) => {
     res.json(parsedData);
   } catch (err: any) {
     console.error("Error connected to Gemini AI:", err);
-    res.status(500).json({ error: "Could not execute Gemini stack analysis. " + err.message });
+    res.status(500).json({ error: getErrorMessage(err, "Could not execute Gemini stack analysis.") });
   }
 });
 
@@ -196,10 +200,8 @@ router.post("/plan-sprint", async (req: any, res) => {
     return res.status(400).json({ error: "Sprint planning requirements are required." });
   }
 
-  const prompt = `
+  const systemInstruction = `
   You are an expert Agile Scrum AI Project Manager. Take these sprint raw project requirements:
-  "${requirements}"
-
   Given the current developer roster:
   ${JSON.stringify(state.developers, null, 2)}
 
@@ -237,6 +239,9 @@ router.post("/plan-sprint", async (req: any, res) => {
   Avoid outputting any markdown strings or backticks. Only return pure valid JSON. Start with { and end with }.
   `;
 
+  // SECURITY FIX #5: Sanitize input to prevent injection escaping
+  const safeRequirements = requirements.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
   try {
     if (!req.ai) {
       return res.status(400).json({ error: "Gemini API key is not configured. Please add a valid API key in Settings to enable AI-powered sprint planning." });
@@ -244,15 +249,18 @@ router.post("/plan-sprint", async (req: any, res) => {
 
     const response = await req.ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: prompt,
-      config: { responseMimeType: "application/json" }
+      contents: safeRequirements,
+      config: { 
+        systemInstruction,
+        responseMimeType: "application/json" 
+      }
     });
 
     const plan = JSON.parse(response.text || "{}");
     res.json(plan);
   } catch (err: any) {
     console.error("Sprint Planning Gemini Error:", err);
-    res.status(500).json({ error: "Could not compile sprint planning proposal. " + err.message });
+    res.status(500).json({ error: getErrorMessage(err, "Could not compile sprint planning proposal.") });
   }
 });
 
@@ -315,7 +323,7 @@ router.post("/review-code", async (req: any, res) => {
     res.json(parsedReview);
   } catch (err: any) {
     console.error("AI Code Review Error:", err);
-    res.status(500).json({ error: "AI Review Engine failed. " + err.message });
+    res.status(500).json({ error: getErrorMessage(err, "AI Review Engine failed.") });
   }
 });
 
@@ -328,7 +336,7 @@ router.post("/chat", async (req: any, res) => {
     return res.status(400).json({ error: "Message is required." });
   }
 
-  const contextPrompt = `
+  const systemInstruction = `
   You are an AI Software Engineering Manager Assistant, a strategic engineering coordinator embedded with the crew.
   Your main duty is to answer questions, report sprint health, evaluate developer workloads, warn about bottleneck blocks, or suggest tactical fixes based on the real-time project state.
 
@@ -351,9 +359,10 @@ router.post("/chat", async (req: any, res) => {
   If asked about workloads or Bottlenecks, refer back directly to the actual story points and task names in our data!
   Use the real developer names, task titles, and story points from the data above. Do NOT reference any developers or tasks that are not present in the current state.
   Suggest explicit corrective actions. Keep responses friendly, elegant, and highly structured (use lists and markdown bold states as proper scannable rhythms).
-
-  User query: "${message}"
   `;
+
+  // SECURITY FIX #5: Sanitize input
+  const safeMessage = message.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
   try {
     if (!req.ai) {
@@ -362,13 +371,16 @@ router.post("/chat", async (req: any, res) => {
 
     const response = await req.ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: contextPrompt
+      contents: safeMessage,
+      config: {
+        systemInstruction
+      }
     });
 
     res.json({ text: response.text });
   } catch (err: any) {
     console.error("AI Engineering Manager Chat error:", err);
-    res.status(500).json({ error: "AI Manager could not respond. " + err.message });
+    res.status(500).json({ error: getErrorMessage(err, "AI Manager could not respond.") });
   }
 });
 
@@ -431,7 +443,7 @@ router.post("/morale-check", async (req: any, res) => {
     res.json(parsedData);
   } catch (err: any) {
     console.error("Morale Check Gemini Error:", err);
-    res.status(500).json({ error: "Could not compile morale and sentiment diagnostic. " + err.message });
+    res.status(500).json({ error: getErrorMessage(err, "Could not compile morale and sentiment diagnostic.") });
   }
 });
 

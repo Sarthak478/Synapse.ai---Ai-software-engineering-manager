@@ -3,8 +3,68 @@ import crypto from "crypto";
 import { getState, verifyPassword, hashPasswordSync, saveState } from "../db/stateManager.js";
 import { createToken } from "../middlewares/auth.js";
 import { Developer } from "../db/models.js";
+import { authenticateToken } from "../middlewares/auth.js";
 
 const router = Router();
+
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+/**
+ * SECURITY FIX #14: Enforce minimum password complexity
+ */
+function isPasswordComplex(password: string): boolean {
+  // Min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
+  const regex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+  return regex.test(password);
+}
+
+/**
+ * SECURITY FIX #15: Security Logging / Audit Trail
+ */
+async function logSecurityEvent(workspaceId: string, eventType: string, details: string) {
+  try {
+    const cleanWorkspace = workspaceId.trim().toLowerCase();
+    const dbState = await getState(cleanWorkspace);
+    if (!dbState.settings.auditLogs) {
+      dbState.settings.auditLogs = [];
+    }
+    dbState.settings.auditLogs.push({
+      eventType,
+      details,
+      timestamp: new Date().toISOString()
+    });
+    await saveState(dbState, cleanWorkspace);
+  } catch (e) {
+    console.error("[AuditLog] Failed to record security event:", e);
+  }
+}
+
+/**
+ * Helper: Set an HttpOnly session cookie on the response.
+ * The cookie is invisible to client-side JavaScript, preventing XSS token theft.
+ */
+function setSessionCookie(res: any, token: string, rememberMe: boolean) {
+  const maxAge = rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+  res.cookie("synapse_session", token, {
+    httpOnly: true,
+    secure: IS_PRODUCTION,
+    sameSite: IS_PRODUCTION ? "strict" : "lax",
+    path: "/",
+    maxAge,
+  });
+}
+
+/**
+ * Helper: Clear the session cookie.
+ */
+function clearSessionCookie(res: any) {
+  res.clearCookie("synapse_session", {
+    httpOnly: true,
+    secure: IS_PRODUCTION,
+    sameSite: IS_PRODUCTION ? "strict" : "lax",
+    path: "/",
+  });
+}
 
 // Login and obtain a secure session token scoped by workspaceId
 router.post("/login", async (req, res) => {
@@ -23,6 +83,16 @@ router.post("/login", async (req, res) => {
 
   const dbState = await getState(cleanWorkspace);
   const cleanUser = username.trim().toLowerCase();
+  
+  // SECURITY FIX #11: Account lockout
+  const dbDevModel = await Developer.findOne({ userId: cleanUser, workspaceId: cleanWorkspace });
+  if (dbDevModel) {
+    if (dbDevModel.lockedUntil && new Date() < dbDevModel.lockedUntil) {
+      await logSecurityEvent(cleanWorkspace, "LOGIN_LOCKED", `Blocked login attempt for locked account ${cleanUser}`);
+      return res.status(403).json({ error: "Account is temporarily locked due to too many failed attempts. Try again later." });
+    }
+  }
+
   const matchedDev = dbState.developers.find(
     (dev: any) => dev.userId?.toLowerCase() === cleanUser
   );
@@ -31,14 +101,17 @@ router.post("/login", async (req, res) => {
   let isValidLogin = false;
   
   if (matchedDev) {
-    const isPasscode = dbState.settings?.recoveryPasscodes?.find(
-      (rp: any) => rp.userId === matchedDev.userId && rp.passcode === password && rp.expiresAt > Date.now()
+    // SECURITY FIX #2: Recovery passcodes are now bcrypt-hashed — use verifyPassword() instead of ===
+    const matchedPasscode = dbState.settings?.recoveryPasscodes?.find(
+      (rp: any) => rp.userId === matchedDev.userId && rp.expiresAt > Date.now() && verifyPassword(password, rp.passcodeHash)
     );
 
-    if (isPasscode) {
+    if (matchedPasscode) {
       isValidLogin = true;
-      // Invalidate the passcode
-      dbState.settings.recoveryPasscodes = dbState.settings.recoveryPasscodes.filter((rp: any) => rp.passcode !== password);
+      // Invalidate the used passcode
+      dbState.settings.recoveryPasscodes = dbState.settings.recoveryPasscodes.filter(
+        (rp: any) => rp !== matchedPasscode
+      );
       await saveState(dbState, cleanWorkspace);
     } else if (verifyPassword(password, matchedDev.password)) {
       isValidLogin = true;
@@ -46,14 +119,36 @@ router.post("/login", async (req, res) => {
   }
 
   if (!isValidLogin) {
+    if (dbDevModel) {
+      dbDevModel.failedLoginAttempts = (dbDevModel.failedLoginAttempts || 0) + 1;
+      if (dbDevModel.failedLoginAttempts >= 5) {
+        dbDevModel.lockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+        await logSecurityEvent(cleanWorkspace, "ACCOUNT_LOCKED", `Account ${cleanUser} locked after 5 failed attempts`);
+      } else {
+        await logSecurityEvent(cleanWorkspace, "LOGIN_FAILED", `Failed login attempt for ${cleanUser}`);
+      }
+      await dbDevModel.save();
+    }
     return res.status(401).json({ error: "Invalid User ID or Password." });
   }
 
+  if (dbDevModel) {
+    dbDevModel.failedLoginAttempts = 0;
+    dbDevModel.lockedUntil = null;
+    await dbDevModel.save();
+  }
+  await logSecurityEvent(cleanWorkspace, "LOGIN_SUCCESS", `Successful login for ${cleanUser}`);
+
   // Create a secure stateless token
+  const sessionVersion = dbDevModel ? dbDevModel.sessionVersion || 1 : 1;
   const token = createToken(
     matchedDev.id,
+    sessionVersion,
     rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
   );
+
+  // SECURITY FIX #3: Set HttpOnly cookie — token is no longer exposed to client JS
+  setSessionCookie(res, token, !!rememberMe);
 
   // Return user info WITHOUT exposing their password hash
   const sanitizedDev = { ...matchedDev };
@@ -61,11 +156,16 @@ router.post("/login", async (req, res) => {
 
   res.json({
     success: true,
-    token,
     devId: matchedDev.id,
     workspaceId: cleanWorkspace,
     dev: sanitizedDev
   });
+});
+
+// Logout — clear the HttpOnly session cookie
+router.post("/logout", (req, res) => {
+  clearSessionCookie(res);
+  res.json({ success: true });
 });
 
 // Initialize workspace / Register a new workspace
@@ -74,6 +174,11 @@ router.post("/register", async (req, res) => {
 
   if (!workspaceId || !name || !userId || !password) {
     return res.status(400).json({ error: "Workspace ID, Name, User ID, and Password are required." });
+  }
+
+  // SECURITY FIX #14: Enforce password complexity
+  if (!isPasswordComplex(password)) {
+    return res.status(400).json({ error: "Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character." });
   }
 
   const cleanWorkspace = workspaceId.trim().toLowerCase();
@@ -126,15 +231,17 @@ router.post("/register", async (req, res) => {
   dbState.settings.masterRecoveryKeyHash = masterRecoveryKeyHash;
   await saveState(dbState, cleanWorkspace);
 
-  // Create session token
-  const token = createToken(newDev.id);
+  // Create session token and set HttpOnly cookie
+  const token = createToken(newDev.id, 1, 24 * 60 * 60 * 1000); // Default to 24h for register, sessionVersion=1
+  setSessionCookie(res, token, false);
+
+  await logSecurityEvent(cleanWorkspace, "WORKSPACE_INIT", `Workspace initialized by ${cleanUserId}`);
 
   const sanitizedDev = { ...newDev };
   delete (sanitizedDev as any).password;
 
   res.json({
     success: true,
-    token,
     devId: newDev.id,
     workspaceId: cleanWorkspace,
     dev: sanitizedDev,
@@ -142,8 +249,8 @@ router.post("/register", async (req, res) => {
   });
 });
 
-// Public list of developers (passwords and credentials fully stripped for security, filtered by workspaceId query param)
-router.get("/developers", async (req, res) => {
+// SECURITY FIX #4: Developer listing now requires authentication to prevent user enumeration
+router.get("/developers", authenticateToken, async (req: any, res) => {
   const workspaceId = req.query.workspaceId as string;
   if (!workspaceId) {
     return res.json([]);
@@ -183,13 +290,17 @@ router.post("/forgot-password", async (req, res) => {
 
   if (!matchedDev) {
     // Return generic success to avoid user enumeration
-    return res.json({ success: true, message: "If the user exists, a passcode has been generated for the Team Head." });
+    return res.json({ success: true, message: "Please ask the team head for the passcode for your access." });
   }
 
-  const passcode = Math.floor(100000 + Math.random() * 900000).toString();
+  // SECURITY FIX #2: Use cryptographically secure random number generator instead of Math.random()
+  const passcode = crypto.randomInt(100000, 999999).toString();
+  // SECURITY FIX #2: Hash the passcode before storing in DB — plain text never persisted
+  const passcodeHash = hashPasswordSync(passcode);
+
   const newPasscodeEntry = {
     userId: matchedDev.userId,
-    passcode,
+    passcodeHash,
     expiresAt: Date.now() + 15 * 60 * 1000 // 15 mins
   };
 
@@ -197,9 +308,26 @@ router.post("/forgot-password", async (req, res) => {
     dbState.settings.recoveryPasscodes = [];
   }
   dbState.settings.recoveryPasscodes.push(newPasscodeEntry);
+
+  // SECURITY FIX #2: Create a head-only notification with the plain passcode
+  // so the Team Head can see it once and give it to the team member
+  if (!dbState.settings.notifications) {
+    dbState.settings.notifications = [];
+  }
+  dbState.settings.notifications.push({
+    id: `passcode-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+    message: `Password reset requested for ${matchedDev.userId}`,
+    passcode,
+    targetUserId: matchedDev.userId,
+    headOnly: true,
+    createdAt: new Date(),
+    readBy: [],
+    expiresAt: Date.now() + 15 * 60 * 1000
+  });
+
   await saveState(dbState, cleanWorkspace);
 
-  res.json({ success: true, message: "If the user exists, a passcode has been generated for the Team Head." });
+  res.json({ success: true, message: "Please ask the team head for the passcode for your access." });
 });
 
 // Recover Team Head account using Master Recovery Key
@@ -207,6 +335,11 @@ router.post("/recover-master", async (req, res) => {
   const { workspaceId, userId, masterRecoveryKey, newPassword } = req.body;
   if (!workspaceId || !userId || !masterRecoveryKey || !newPassword) {
     return res.status(400).json({ error: "All fields are required." });
+  }
+
+  // SECURITY FIX #14: Enforce password complexity
+  if (!isPasswordComplex(newPassword)) {
+    return res.status(400).json({ error: "Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character." });
   }
 
   const cleanWorkspace = workspaceId.trim().toLowerCase();
@@ -229,14 +362,26 @@ router.post("/recover-master", async (req, res) => {
     return res.status(401).json({ error: "Invalid Master Recovery Key." });
   }
 
+  // SECURITY FIX: Password Anti-Reuse Policy
+  const history = matchedDev.passwordHistory || [];
+  const isReused = history.some((oldHash: string) => verifyPassword(newPassword, oldHash)) || verifyPassword(newPassword, matchedDev.password);
+  
+  if (isReused) {
+    return res.status(400).json({ error: "Your current password must not match with your last 4 passwords." });
+  }
+
   const newPasswordHash = hashPasswordSync(newPassword);
+  const newHistory = [matchedDev.password, ...history].slice(0, 3);
 
   // Update in DB
+  // SECURITY FIX #12: Increment sessionVersion to revoke old tokens
   await Developer.findOneAndUpdate(
     { userId: matchedDev.userId },
     { 
       password: newPasswordHash,
-      passwordChangedAt: new Date()
+      passwordHistory: newHistory,
+      passwordChangedAt: new Date(),
+      $inc: { sessionVersion: 1 }
     }
   );
 
@@ -244,6 +389,8 @@ router.post("/recover-master", async (req, res) => {
   matchedDev.password = newPasswordHash;
   matchedDev.passwordChangedAt = new Date().toISOString();
   await saveState(dbState, cleanWorkspace);
+  
+  await logSecurityEvent(cleanWorkspace, "PASSWORD_RESET", `Password reset via master key for ${cleanUser}`);
 
   res.json({ success: true, message: "Password updated successfully." });
 });

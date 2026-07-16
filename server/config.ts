@@ -39,6 +39,7 @@ export function buildCorsOptions(env: NodeJS.ProcessEnv = process.env): CorsOpti
       }
 
       callback(null, allowedOrigins.includes(origin));
-    }
+    },
+    credentials: true
   };
 }

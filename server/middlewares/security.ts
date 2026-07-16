@@ -30,20 +30,37 @@ export function sanitizeInput(val: any): any {
  * Sets security headers and filters input body/queries
  */
 export function securityMiddleware(req: any, res: any, next: any) {
-  // Set production security headers
+  // --- Strip server fingerprinting headers ---
+  res.removeHeader("X-Powered-By");
+  res.removeHeader("Server");
+
+  // --- Core Security Headers ---
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("X-XSS-Protection", "1; mode=block");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
   res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
 
+  // --- Content Security Policy (all environments) ---
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: https://images.unsplash.com https://api.dicebear.com",
+    "connect-src 'self'",
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ];
+  res.setHeader("Content-Security-Policy", cspDirectives.join("; "));
+
+  // --- Production-only transport security ---
   if (process.env.NODE_ENV === "production") {
-    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'self'; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
-    );
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
   }
 
   if (req.body) {
@@ -98,3 +115,45 @@ export function errorBoundary(err: any, req: any, res: any, next: any) {
     error: "A secure server error occurred. Please contact your enterprise administrator."
   });
 }
+
+/**
+ * SECURITY FIX #7: Hide internal error details in production
+ */
+export function getErrorMessage(err: any, fallback: string): string {
+  if (process.env.NODE_ENV === "production") {
+    return fallback;
+  }
+  return err.message ? `${fallback}: ${err.message}` : fallback;
+}
+
+/**
+ * SECURITY FIX #10: Strict CSRF protection validating Origin and Referer headers
+ * against allowed origins for all state-mutating requests.
+ */
+export function csrfProtection(req: Request, res: Response, next: NextFunction) {
+  // Safe methods don't need CSRF protection
+  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
+    return next();
+  }
+
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
+  
+  // If no Origin or Referer is provided, reject the request (browser always sends them for cross-origin POST)
+  if (!origin && !referer) {
+    console.warn(`[CSRF] Blocked request with missing Origin and Referer headers from IP: ${req.ip}`);
+    return res.status(403).json({ error: "CSRF verification failed: Missing origin headers." });
+  }
+
+  // Validate against configured APP_URL or localhost in development
+  const allowedUrl = process.env.APP_URL || "http://localhost:3000";
+  const sourceUrl = origin || referer || "";
+
+  if (!sourceUrl.startsWith(allowedUrl) && process.env.NODE_ENV === "production") {
+    console.warn(`[CSRF] Blocked request from unauthorized origin: ${sourceUrl}`);
+    return res.status(403).json({ error: "CSRF verification failed: Invalid origin." });
+  }
+
+  next();
+}
+

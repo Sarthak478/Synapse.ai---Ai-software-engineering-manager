@@ -122,13 +122,12 @@ export default function TimerWidget() {
     setIsAuditing(true);
 
     try {
-      const token = localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token");
       const response = await fetch("/api/gemini/review-code", {
         method: "POST",
         headers: { 
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          "Content-Type": "application/json"
         },
+        credentials: "include",
         body: JSON.stringify({ fileName, codeSnippet })
       });
 

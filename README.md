@@ -93,6 +93,8 @@ The server intentionally fails fast in production if required security settings 
 
 ## Security Notes
 
+> For a detailed, comprehensive overview of our implemented security measures and active architectural roadmap, please read the [Synapse Security Hardening Documentation](file:///d:/ai-software-engineering-manager/planning/security_hardening.md).
+
 - Passwords are hashed with bcrypt before storage.
 - Session tokens are HMAC-signed and production requires an explicit strong `JWT_SECRET`.
 - Stored Gemini API keys are encrypted server-side.

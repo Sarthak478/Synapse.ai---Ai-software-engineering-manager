@@ -37,6 +37,8 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Active developer profile state - requiring secure authentication
+  // SECURITY FIX #3: Session token is NO LONGER stored client-side — it lives in an HttpOnly cookie.
+  // Only devId and workspaceId (non-sensitive identifiers) are persisted for UI state.
   const [activeDevId, setActiveDevId] = useState<string | null>(() => {
     return localStorage.getItem("synapse-active-dev-id") || sessionStorage.getItem("synapse-active-dev-id") || null;
   });
@@ -45,20 +47,27 @@ export default function App() {
     return localStorage.getItem("synapse-active-workspace-id") || sessionStorage.getItem("synapse-active-workspace-id") || null;
   });
 
-  const [sessionToken, setSessionToken] = useState<string | null>(() => {
-    return localStorage.getItem("synapse-session-token") || sessionStorage.getItem("synapse-session-token") || null;
+  // SECURITY FIX #3: isAuthenticated tracks whether we have a valid session (cookie-based).
+  // We verify this by making a test request to /api/state on mount.
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    // Optimistic: if we have a devId stored, we likely have a valid cookie too
+    return !!(localStorage.getItem("synapse-active-dev-id") || sessionStorage.getItem("synapse-active-dev-id"));
   });
 
   const [publicDevs, setPublicDevs] = useState<any[]>([]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // SECURITY FIX #3: Clear the HttpOnly cookie server-side
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    } catch (e) {
+      // Best-effort — cookie will expire naturally if server is unreachable
+    }
     setActiveDevId(null);
-    setSessionToken(null);
+    setIsAuthenticated(false);
     setActiveWorkspaceId(null);
     localStorage.removeItem("synapse-active-dev-id");
     sessionStorage.removeItem("synapse-active-dev-id");
-    localStorage.removeItem("synapse-session-token");
-    sessionStorage.removeItem("synapse-session-token");
     localStorage.removeItem("synapse-active-workspace-id");
     sessionStorage.removeItem("synapse-active-workspace-id");
     setState(null);
@@ -82,17 +91,6 @@ export default function App() {
         localStorage.setItem("synapse-active-workspace-id", workspaceId);
       } else {
         sessionStorage.setItem("synapse-active-workspace-id", workspaceId);
-      }
-    }
-  };
-
-  const handleSetSessionToken = (token: string | null, rememberMe: boolean = false) => {
-    setSessionToken(token);
-    if (token) {
-      if (rememberMe) {
-        localStorage.setItem("synapse-session-token", token);
-      } else {
-        sessionStorage.setItem("synapse-session-token", token);
       }
     }
   };
@@ -177,15 +175,13 @@ export default function App() {
   }, [isDarkMode]);
 
   // Fetch compiled server DB states on mount
-  const fetchState = async (tokenToUse?: string) => {
-    const token = tokenToUse || sessionToken;
-    if (!token) return;
+  // SECURITY FIX #3: Uses credentials: 'include' to send the HttpOnly session cookie
+  const fetchState = async () => {
+    if (!isAuthenticated) return;
     setIsSyncing(true);
     try {
       const response = await fetch("/api/state", {
-        headers: {
-          "Authorization": `Bearer ${token}`
-        }
+        credentials: "include"
       });
       if (response.status === 401 || response.status === 403) {
         handleLogout();
@@ -208,11 +204,12 @@ export default function App() {
   };
 
   const fetchPublicDevs = async () => {
-    // Developers list is now queried dynamically per workspace if needed, 
-    // but since we removed the quick roster it's mostly unused.
-    if (!activeWorkspaceId) return;
+    // SECURITY FIX #4: Developers list now requires authentication
+    if (!activeWorkspaceId || !isAuthenticated) return;
     try {
-      const response = await fetch(`/api/auth/developers?workspaceId=${encodeURIComponent(activeWorkspaceId)}`);
+      const response = await fetch(`/api/auth/developers?workspaceId=${encodeURIComponent(activeWorkspaceId)}`, {
+        credentials: "include"
+      });
       if (response.ok) {
         const data = await response.json();
         setPublicDevs(data);
@@ -223,14 +220,13 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (sessionToken) {
-      fetchState(sessionToken);
-    } else {
-      fetchPublicDevs();
+    if (isAuthenticated) {
+      fetchState();
     }
-  }, [sessionToken, activeWorkspaceId]);
+  }, [isAuthenticated, activeWorkspaceId]);
 
   // Synchronize state changes to server JSON DB securely
+  // SECURITY FIX #3: Uses credentials: 'include' instead of Authorization header
   const handleSaveState = async (updatedState: AppState, rawGeminiKeyToSend?: string) => {
     // 1. Save project-specific fields strictly to local storage (zero-knowledge, user-scoped)
     saveSharedLocalProjectData(activeWorkspaceId, activeDevId, updatedState);
@@ -238,7 +234,7 @@ export default function App() {
     // 2. Perform instant optimistic local state update for responsiveness
     setState(updatedState);
 
-    if (!sessionToken) return;
+    if (!isAuthenticated) return;
     setIsSyncing(true);
     try {
       // Prepare sanitized body to send to server
@@ -257,9 +253,9 @@ export default function App() {
       const response = await fetch("/api/state/save", {
         method: "POST",
         headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${sessionToken}`
+          "Content-Type": "application/json"
         },
+        credentials: "include",
         body: JSON.stringify(payload)
       });
       if (response.status === 401 || response.status === 403) {
@@ -282,7 +278,7 @@ export default function App() {
   // Reset database state — clears all project data
   const handleResetDatabase = async () => {
     if (!window.confirm("Are you sure you want to clear all sprint plans, repositories, tasks, and logs? This cannot be undone.")) return;
-    if (!sessionToken) return;
+    if (!isAuthenticated) return;
     setIsSyncing(true);
     try {
       // 1. Reset client-side project data for this user
@@ -292,9 +288,7 @@ export default function App() {
 
       const response = await fetch("/api/state/reset", { 
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${sessionToken}`
-        }
+        credentials: "include"
       });
       if (response.status === 401 || response.status === 403) {
         handleLogout();
@@ -329,12 +323,14 @@ export default function App() {
   };
 
   // ENFORCE AUTHENTICATION: Show LoginScreen if not authenticated
-  if (!sessionToken || !activeDevId || !activeWorkspaceId) {
+  if (!isAuthenticated || !activeDevId || !activeWorkspaceId) {
     return (
       <LoginScreen
         developers={publicDevs}
         onLoginSuccess={(token, devId, rememberMe, workspaceId) => {
-          handleSetSessionToken(token, rememberMe);
+          // SECURITY FIX #3: Token is now in an HttpOnly cookie set by the server.
+          // We only store the non-sensitive identifiers client-side for UI state.
+          setIsAuthenticated(true);
           handleSetActiveDevId(devId, rememberMe);
           handleSetActiveWorkspaceId(workspaceId, rememberMe);
         }}
@@ -369,7 +365,9 @@ export default function App() {
   const completionScore = totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
 
   const unreadNotifications = state.settings?.notifications?.filter((n: any) => !n.readBy.includes(activeDevId)) || [];
-  const activePasscodes = state.settings?.recoveryPasscodes?.filter((rp: any) => rp.expiresAt > Date.now()) || [];
+  // SECURITY FIX #2: Passcode notifications now come through headOnly notifications
+  // instead of raw recoveryPasscodes array. They include { passcode, targetUserId, headOnly: true }
+  const activePasscodeNotifs = unreadNotifications.filter((n: any) => n.headOnly && n.passcode);
 
   const handleDismissNotification = async (notifId: string) => {
     const updatedNotifs = state.settings?.notifications?.map((n: any) => {
@@ -379,17 +377,12 @@ export default function App() {
     await handleSaveState({ ...state, settings: { ...state.settings, notifications: updatedNotifs } as any });
   };
 
-  const handleDismissPasscode = async (passcodeVal: string) => {
-    const updatedPasscodes = state.settings?.recoveryPasscodes?.filter((rp: any) => rp.passcode !== passcodeVal) || [];
-    await handleSaveState({ ...state, settings: { ...state.settings, recoveryPasscodes: updatedPasscodes } as any });
-  };
-
   return (
     <div className={`flex bg-beige-50 min-h-screen text-coffee-800 antialiased font-sans transition-colors duration-200 ${isDarkMode ? "dark bg-[#150E0A] text-[#ECE4DE]" : ""}`}>
       
       {/* GLOBAL OVERLAYS — always-visible toasts with solid opaque backdrop */}
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
-        {unreadNotifications.map((n: any) => (
+        {unreadNotifications.filter((n: any) => !n.headOnly).map((n: any) => (
           <div
             key={n.id}
             className="bg-[#0F1F1A] border border-teal-500 p-3 rounded-xl shadow-2xl max-w-sm pointer-events-auto flex items-start gap-3 animate-in slide-in-from-right-8 backdrop-blur-md"
@@ -408,23 +401,23 @@ export default function App() {
           </div>
         ))}
 
-        {loggedInDev.isHead && activePasscodes.map((rp: any) => (
+        {loggedInDev.isHead && activePasscodeNotifs.map((n: any) => (
           <div
-            key={rp.passcode}
+            key={n.id}
             className="bg-[#1F1500] border border-amber-500 p-3 rounded-xl shadow-2xl max-w-sm pointer-events-auto flex items-start gap-3 animate-in slide-in-from-right-8 backdrop-blur-md"
           >
             <Info className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <h4 className="text-xs font-bold text-amber-300 mb-0.5">🔑 Passcode Request</h4>
               <p className="text-[10px] text-amber-200 mb-1.5">
-                Password reset requested for: <strong className="text-white">{rp.userId}</strong>
+                Password reset requested for: <strong className="text-white">{n.targetUserId}</strong>
               </p>
               <p className="text-xs font-mono font-bold bg-amber-900/60 border border-amber-700 text-amber-200 px-2 py-1 rounded-lg inline-block tracking-widest">
-                {rp.passcode}
+                {n.passcode}
               </p>
             </div>
             <button
-              onClick={() => handleDismissPasscode(rp.passcode)}
+              onClick={() => handleDismissNotification(n.id)}
               className="text-[9px] font-bold text-amber-900 bg-amber-400 hover:bg-amber-300 px-2 py-1 rounded transition-colors shrink-0"
             >
               Done
