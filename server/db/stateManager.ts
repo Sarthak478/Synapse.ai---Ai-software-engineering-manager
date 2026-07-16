@@ -99,7 +99,8 @@ export function verifyPassword(plain: string, hash: string): boolean {
 const DEV_DISK_FIELDS = [
   "id", "workspaceId", "name", "avatar", "email", "role", "skills",
   "workloadPoints", "velocity", "activeTaskId", "isHead",
-  "userId", "password", "passwordHistory", "passwordChangedAt", "addedBy", "personalCredentials", "contributions"
+  "userId", "password", "passwordHistory", "passwordChangedAt", "mustResetPassword",
+  "addedBy", "personalCredentials", "contributions"
 ] as const;
 
 /** Strips any unknown fields from a developer object before writing to DB */

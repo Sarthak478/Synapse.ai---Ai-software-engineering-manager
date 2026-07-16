@@ -29,10 +29,15 @@ This document tracks the phased security hardening implementations for the Synap
 
 ---
 
+### Phase 6: Hybrid Email Recovery System
+- **Resend Integration**: Integrated `resend` API with robust AES-256-GCM encryption for storing API keys.
+- **Forced Resets**: Implemented `mustResetPassword` flag enforcing new users to set their own passwords upon first login.
+- **Time-bound JWTs**: Created stateless, time-bound JWT tokens (15 mins for resets, 72 hours for initial setup) for secure one-click actions.
+- **Graceful Fallback**: If a Head does not configure email keys, the system transparently falls back to the manual passcode recovery UI.
+
+---
+
 ## Upcoming / Planned Enhancements
 
 ### Phase 5: Multi-Factor Authentication (MFA)
 - Time-based One Time Password (TOTP) enforcement for Team Heads and elevated accounts.
-
-### Phase 6: Automated Recovery Links
-- Migration away from the manual "ask the Team Head" passcode flow toward secure, time-sensitive JWT email payloads via `nodemailer`.

@@ -1,11 +1,13 @@
 import { Router } from "express";
 import crypto from "crypto";
-import { getState, saveState, defaultState, hashPasswordSync, encryptKey, verifyPassword } from "../db/stateManager.js";
-import { Developer } from "../db/models.js";
+import { getState, saveState, defaultState, hashPasswordSync, encryptKey, decryptKey, verifyPassword } from "../db/stateManager.js";
+import { Developer, Settings } from "../db/models.js";
+import { createToken } from "../middlewares/auth.js";
 import { hashGeminiApiKey, hasStoredGeminiApiKey, repairGeminiKeySettings } from "./geminiKeyState.js";
 import { canDeleteDeveloper, canSetHeadPrivilege, hasAtLeastOneHead } from "./teamPermissions.js";
 import { getWorkspaceIdForDev } from "./workspaceAccess.js";
 import { getErrorMessage } from "../middlewares/security.js";
+import { sendWelcomeEmail } from "../services/email.js";
 
 const router = Router();
 
@@ -53,6 +55,8 @@ function buildSafeState(dbState: any, currentDevId?: string) {
 
   sanitized.settings = {
     hasGeminiApiKey: hasStoredGeminiApiKey(dbState.settings),
+    hasResendConfigured: !!(dbState.settings?.resendApiKeyEncrypted && dbState.settings?.resendFromEmail),
+    resendFromEmail: isHead ? (dbState.settings?.resendFromEmail || "") : undefined,
     notifications: filteredNotifications,
     // SECURITY FIX #2: Never send recoveryPasscodes to clients — they are hashed
     // and only consumed server-side during login verification
@@ -120,6 +124,25 @@ router.post("/save", async (req: any, res: any) => {
     }
     if (incomingState.settings.recoveryPasscodes !== undefined) {
       dbState.settings.recoveryPasscodes = incomingState.settings.recoveryPasscodes;
+    }
+    
+    // Hybrid Email System: Save Resend configuration (Head-only)
+    if (incomingState.settings.resendApiKey !== undefined) {
+      if (!isHead) {
+        return res.status(403).json({ error: "Access Denied: Only a Team Head can configure email notifications." });
+      }
+      const rawResendKey = String(incomingState.settings.resendApiKey || "").trim();
+      if (rawResendKey) {
+        dbState.settings.resendApiKeyEncrypted = encryptKey(rawResendKey);
+      } else {
+        dbState.settings.resendApiKeyEncrypted = "";
+      }
+    }
+    if (incomingState.settings.resendFromEmail !== undefined) {
+      if (!isHead) {
+        return res.status(403).json({ error: "Access Denied: Only a Team Head can configure email notifications." });
+      }
+      dbState.settings.resendFromEmail = String(incomingState.settings.resendFromEmail || "").trim();
     }
   }
 
@@ -269,11 +292,35 @@ router.post("/save", async (req: any, res: any) => {
           isHead: !!incomingDev.isHead,
           userId: cleanUserId,
           password: hashPasswordSync(rawPassword),
+          passwordHistory: [],
           passwordChangedAt: null,
+          mustResetPassword: true,
           addedBy: currentDevId,
           personalCredentials: {},
           contributions: incomingDev.contributions || { commits: 0, PRs: 0, reviews: 0 }
         });
+
+        // Send welcome email if Resend is configured
+        const settingsDoc = await Settings.findOne({ workspaceId });
+        if (settingsDoc?.resendApiKeyEncrypted && settingsDoc?.resendFromEmail) {
+          try {
+            const apiKey = decryptKey(settingsDoc.resendApiKeyEncrypted);
+            const setupToken = createToken(incomingDev.id, 1, 72 * 60 * 60 * 1000);
+            const appUrl = process.env.APP_URL || "http://localhost:3000";
+            const setupLink = `${appUrl}?setup-token=${encodeURIComponent(setupToken)}&workspace=${encodeURIComponent(workspaceId)}&user=${encodeURIComponent(cleanUserId)}`;
+            
+            sendWelcomeEmail(
+              incomingDev.email || `${cleanUserId}@company.com`,
+              incomingDev.name,
+              cleanUserId,
+              setupLink,
+              settingsDoc.resendFromEmail,
+              apiKey
+            ).catch(err => console.error("[State] Welcome email failed:", err));
+          } catch (e) {
+            console.error("[State] Could not send welcome email");
+          }
+        }
 
         // Add announcement notification
         if (!dbState.settings.notifications) {

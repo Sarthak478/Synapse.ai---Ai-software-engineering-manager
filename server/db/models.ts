@@ -8,7 +8,7 @@ const developerSchema = new mongoose.Schema({
   workspaceId: { type: String, required: true },
   name: { type: String, required: true },
   avatar: { type: String },
-  email: { type: String },
+  email: { type: String, required: true },
   role: { type: String },
   skills: { type: [String], default: [] },
   workloadPoints: { type: Number, default: 0 },
@@ -19,6 +19,7 @@ const developerSchema = new mongoose.Schema({
   password: { type: String, required: true },
   passwordHistory: { type: [String], default: [] },
   passwordChangedAt: { type: Date, default: null },
+  mustResetPassword: { type: Boolean, default: true },
   addedBy: { type: String },
   personalCredentials: { type: Object, default: {} },
   personalCredentialsEncrypted: { type: String, default: "" },
@@ -49,7 +50,10 @@ const settingsSchema = new mongoose.Schema({
   notifications: { type: Array, default: [] },
   recoveryPasscodes: { type: Array, default: [] },
   // SECURITY FIX #15: Security audit trail
-  auditLogs: { type: Array, default: [] }
+  auditLogs: { type: Array, default: [] },
+  // Hybrid Email System: Resend integration
+  resendApiKeyEncrypted: { type: String, default: "" },
+  resendFromEmail: { type: String, default: "" }
 });
 
 export const Settings = mongoose.model("Settings", settingsSchema);

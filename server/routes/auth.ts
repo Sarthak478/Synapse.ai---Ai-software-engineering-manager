@@ -1,9 +1,10 @@
 import { Router } from "express";
 import crypto from "crypto";
-import { getState, verifyPassword, hashPasswordSync, saveState } from "../db/stateManager.js";
-import { createToken } from "../middlewares/auth.js";
-import { Developer } from "../db/models.js";
+import { getState, verifyPassword, hashPasswordSync, saveState, encryptKey, decryptKey } from "../db/stateManager.js";
+import { createToken, verifyTokenWithSecret, resolveJwtSecret } from "../middlewares/auth.js";
+import { Developer, Settings } from "../db/models.js";
 import { authenticateToken } from "../middlewares/auth.js";
+import { sendWelcomeEmail, sendPasswordResetEmail } from "../services/email.js";
 
 const router = Router();
 
@@ -146,6 +147,19 @@ router.post("/login", async (req, res) => {
     sessionVersion,
     rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
   );
+
+  // Check if the user must reset their password on first login
+  if (matchedDev.mustResetPassword) {
+    // Generate a short-lived setup token (72 hours)
+    const setupToken = createToken(matchedDev.id, sessionVersion, 72 * 60 * 60 * 1000);
+    return res.json({
+      success: true,
+      mustResetPassword: true,
+      devId: matchedDev.id,
+      workspaceId: cleanWorkspace,
+      setupToken
+    });
+  }
 
   // SECURITY FIX #3: Set HttpOnly cookie — token is no longer exposed to client JS
   setSessionCookie(res, token, !!rememberMe);
@@ -393,6 +407,162 @@ router.post("/recover-master", async (req, res) => {
   await logSecurityEvent(cleanWorkspace, "PASSWORD_RESET", `Password reset via master key for ${cleanUser}`);
 
   res.json({ success: true, message: "Password updated successfully." });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// HYBRID EMAIL SYSTEM ROUTES
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * POST /setup-password
+ * Allows a new member to set their own password using a one-time setup token.
+ * This is used both for email-based setup links and first-login forced resets.
+ */
+router.post("/setup-password", async (req, res) => {
+  const { workspaceId, newPassword, setupToken } = req.body;
+  if (!workspaceId || !newPassword || !setupToken) {
+    return res.status(400).json({ error: "All fields are required." });
+  }
+
+  if (!isPasswordComplex(newPassword)) {
+    return res.status(400).json({ error: "Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character." });
+  }
+
+  const secret = resolveJwtSecret();
+  const payload = verifyTokenWithSecret(setupToken, secret);
+  if (!payload) {
+    return res.status(401).json({ error: "Setup link has expired or is invalid. Please request a new one." });
+  }
+
+  const cleanWorkspace = workspaceId.trim().toLowerCase();
+  const dbDev = await Developer.findOne({ id: payload.devId, workspaceId: cleanWorkspace });
+  if (!dbDev) {
+    return res.status(404).json({ error: "Developer not found." });
+  }
+
+  const newPasswordHash = hashPasswordSync(newPassword);
+
+  dbDev.password = newPasswordHash;
+  dbDev.mustResetPassword = false;
+  dbDev.passwordChangedAt = new Date();
+  dbDev.sessionVersion = (dbDev.sessionVersion || 1) + 1;
+  await dbDev.save();
+
+  await logSecurityEvent(cleanWorkspace, "PASSWORD_SETUP", `First-time password setup for ${dbDev.userId}`);
+
+  // Issue a real session now
+  const token = createToken(dbDev.id, dbDev.sessionVersion);
+  setSessionCookie(res, token, false);
+
+  res.json({
+    success: true,
+    devId: dbDev.id,
+    workspaceId: cleanWorkspace,
+    message: "Password set successfully. You are now logged in."
+  });
+});
+
+/**
+ * POST /send-reset-email
+ * Sends a password reset email if Resend is configured.
+ * Returns { emailNotConfigured: true } if not, so the frontend can fall back to the passcode method.
+ */
+router.post("/send-reset-email", async (req, res) => {
+  const { workspaceId, userId } = req.body;
+  if (!workspaceId || !userId) {
+    return res.status(400).json({ error: "Workspace ID and User ID are required." });
+  }
+
+  const cleanWorkspace = workspaceId.trim().toLowerCase();
+  const cleanUser = userId.trim().toLowerCase();
+
+  const settingsDoc = await Settings.findOne({ workspaceId: cleanWorkspace });
+  if (!settingsDoc || !settingsDoc.resendApiKeyEncrypted || !settingsDoc.resendFromEmail) {
+    return res.json({ emailNotConfigured: true });
+  }
+
+  const dbDev = await Developer.findOne({ userId: cleanUser, workspaceId: cleanWorkspace });
+  if (!dbDev || !dbDev.email) {
+    // Don't reveal whether the user exists — always show success
+    return res.json({ success: true, message: "If an account with that User ID exists, a reset email has been sent." });
+  }
+
+  try {
+    const apiKey = decryptKey(settingsDoc.resendApiKeyEncrypted);
+    const fromEmail = settingsDoc.resendFromEmail;
+
+    // Generate a 15-minute reset token
+    const resetToken = createToken(dbDev.id, dbDev.sessionVersion || 1, 15 * 60 * 1000);
+    const appUrl = process.env.APP_URL || "http://localhost:3000";
+    const resetLink = `${appUrl}?reset-token=${encodeURIComponent(resetToken)}&workspace=${encodeURIComponent(cleanWorkspace)}`;
+
+    const result = await sendPasswordResetEmail(
+      dbDev.email,
+      dbDev.name,
+      resetLink,
+      fromEmail,
+      apiKey
+    );
+
+    if (!result.success) {
+      console.error("[Auth] Failed to send reset email:", result.error);
+    }
+
+    await logSecurityEvent(cleanWorkspace, "RESET_EMAIL_SENT", `Password reset email requested for ${cleanUser}`);
+  } catch (err) {
+    console.error("[Auth] Error sending reset email");
+  }
+
+  // Always return success to prevent user enumeration
+  res.json({ success: true, message: "If an account with that User ID exists, a reset email has been sent." });
+});
+
+/**
+ * POST /reset-via-link
+ * Resets a password using a time-bound JWT token from an email link.
+ */
+router.post("/reset-via-link", async (req, res) => {
+  const { token, newPassword, workspaceId } = req.body;
+  if (!token || !newPassword || !workspaceId) {
+    return res.status(400).json({ error: "All fields are required." });
+  }
+
+  if (!isPasswordComplex(newPassword)) {
+    return res.status(400).json({ error: "Password must be at least 8 characters long and include an uppercase letter, a lowercase letter, a number, and a special character." });
+  }
+
+  const secret = resolveJwtSecret();
+  const payload = verifyTokenWithSecret(token, secret);
+  if (!payload) {
+    return res.status(401).json({ error: "Reset link has expired or is invalid. Please request a new one." });
+  }
+
+  const cleanWorkspace = workspaceId.trim().toLowerCase();
+  const dbDev = await Developer.findOne({ id: payload.devId, workspaceId: cleanWorkspace });
+  if (!dbDev) {
+    return res.status(404).json({ error: "Developer not found." });
+  }
+
+  // Password history anti-reuse check
+  const history = dbDev.passwordHistory || [];
+  const isReused = history.some((oldHash: string) => verifyPassword(newPassword, oldHash)) || verifyPassword(newPassword, dbDev.password);
+  if (isReused) {
+    return res.status(400).json({ error: "Your current password must not match with your last 4 passwords." });
+  }
+
+  const newPasswordHash = hashPasswordSync(newPassword);
+  const newHistory = [dbDev.password, ...history].slice(0, 3);
+
+  dbDev.password = newPasswordHash;
+  dbDev.passwordHistory = newHistory;
+  dbDev.passwordChangedAt = new Date();
+  dbDev.mustResetPassword = false;
+  dbDev.sessionVersion = (dbDev.sessionVersion || 1) + 1;
+  await dbDev.save();
+
+  await logSecurityEvent(cleanWorkspace, "PASSWORD_RESET_VIA_LINK", `Password reset via email link for ${dbDev.userId}`);
+
+  res.json({ success: true, message: "Password has been reset successfully. Please log in with your new password." });
 });
 
 export default router;

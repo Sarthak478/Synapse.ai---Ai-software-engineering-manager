@@ -97,7 +97,8 @@ The server intentionally fails fast in production if required security settings 
 
 - Passwords are hashed with bcrypt before storage.
 - Session tokens are HMAC-signed and production requires an explicit strong `JWT_SECRET`.
-- Stored Gemini API keys are encrypted server-side.
+- Stored Gemini and Resend API keys are encrypted server-side with `aes-256-gcm`.
+- Account recovery uses a Hybrid Email System: secure, time-bound JWT reset links via Resend API, with a seamless air-gapped passcode fallback if not configured.
 - Client state responses strip password hashes and personal credentials.
 - Production CORS is allowlisted.
 - Auth and AI routes have request rate limits.
